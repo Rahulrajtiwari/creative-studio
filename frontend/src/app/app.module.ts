@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,6 @@
  * limitations under the License.
  */
 
-import {importProvidersFrom, Injector, NgModule} from '@angular/core';
-import {initializeApp, provideFirebaseApp} from '@angular/fire/app';
-import {getAuth, provideAuth} from '@angular/fire/auth';
-import {getFirestore, provideFirestore} from '@angular/fire/firestore';
-import {MatButtonModule} from '@angular/material/button';
-import {MatChipsModule} from '@angular/material/chips';
-import {MatDatepickerModule} from '@angular/material/datepicker';
-import {MatNativeDateModule} from '@angular/material/core';
-import {MatDividerModule} from '@angular/material/divider';
-import {MatExpansionModule} from '@angular/material/expansion';
-import {MatIconModule} from '@angular/material/icon';
-import {MatMenuModule} from '@angular/material/menu';
-import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
-import {MatSelectModule} from '@angular/material/select';
-import {MatTabsModule} from '@angular/material/tabs';
-import {MatToolbarModule} from '@angular/material/toolbar';
-import {MatTooltipModule} from '@angular/material/tooltip';
-import {BrowserModule, provideClientHydration} from '@angular/platform-browser';
-import {environment} from '../environments/environment';
-import {setAppInjector} from './app-injector';
-import {NotificationContainerComponent} from './common/components/notification-container/notification-container.component';
-
 import {ClipboardModule} from '@angular/cdk/clipboard';
 import {DragDropModule} from '@angular/cdk/drag-drop';
 import {ScrollingModule} from '@angular/cdk/scrolling';
@@ -45,43 +23,60 @@ import {
   provideHttpClient,
   withInterceptorsFromDi,
 } from '@angular/common/http';
-import {getAnalytics, provideAnalytics} from '@angular/fire/analytics';
-import {AngularFireModule} from '@angular/fire/compat';
-import {
-  AngularFireAnalyticsModule,
-  ScreenTrackingService,
-  UserTrackingService,
-} from '@angular/fire/compat/analytics';
-import {AngularFireAuthModule} from '@angular/fire/compat/auth';
-import {AngularFireDatabaseModule} from '@angular/fire/compat/database';
-import {AngularFirestoreModule} from '@angular/fire/compat/firestore';
+import {HttpClient} from '@angular/common/http';
+import {APP_INITIALIZER, Injector, NgModule} from '@angular/core';
 import {FormsModule, ReactiveFormsModule} from '@angular/forms';
+import {Observable, of} from 'rxjs';
+import {catchError, map} from 'rxjs/operators';
+import {MatButtonModule} from '@angular/material/button';
 import {MatButtonToggleModule} from '@angular/material/button-toggle';
 import {MatCardModule} from '@angular/material/card';
+import {MatChipsModule} from '@angular/material/chips';
 import {MatCheckboxModule} from '@angular/material/checkbox';
+import {MatNativeDateModule} from '@angular/material/core';
+import {MatDatepickerModule} from '@angular/material/datepicker';
 import {MatDialogModule} from '@angular/material/dialog';
+import {MatDividerModule} from '@angular/material/divider';
+import {MatExpansionModule} from '@angular/material/expansion';
 import {MatFormFieldModule} from '@angular/material/form-field';
+import {MatIconModule} from '@angular/material/icon';
 import {MatInputModule} from '@angular/material/input';
+import {MatMenuModule} from '@angular/material/menu';
 import {MatPaginatorModule} from '@angular/material/paginator';
 import {MatProgressBarModule} from '@angular/material/progress-bar';
+import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatRadioModule} from '@angular/material/radio';
-import {MatSlideToggleModule} from '@angular/material/slide-toggle';
+import {MatSelectModule} from '@angular/material/select';
 import {MatSliderModule} from '@angular/material/slider';
+import {MatSlideToggleModule} from '@angular/material/slide-toggle';
 import {MatStepperModule} from '@angular/material/stepper';
 import {MatTableModule} from '@angular/material/table';
+import {MatTabsModule} from '@angular/material/tabs';
+import {MatToolbarModule} from '@angular/material/toolbar';
+import {MatTooltipModule} from '@angular/material/tooltip';
+import {BrowserModule, provideClientHydration} from '@angular/platform-browser';
 import {BrowserAnimationsModule} from '@angular/platform-browser/animations';
+import {
+  LogLevel,
+  OpenIdConfiguration,
+  StsConfigHttpLoader,
+  StsConfigLoader,
+  provideAuth,
+} from 'angular-auth-oidc-client';
 import {ImageCropperComponent} from 'ngx-image-cropper';
+
+import {setAppInjector} from './app-injector';
 import {AppRoutingModule} from './app-routing.module';
 import {AppComponent} from './app.component';
 import {AudioComponent} from './audio/audio.component';
 import {AuthInterceptor} from './auth.interceptor';
-
+import {AssignTagsDialogComponent} from './common/components/assign-tags-dialog/assign-tags-dialog.component';
 import {FlowPromptBoxComponent} from './common/components/flow-prompt-box/flow-prompt-box.component';
 import {ImageCropperDialogComponent} from './common/components/image-cropper-dialog/image-cropper-dialog.component';
 import {ImageSelectorComponent} from './common/components/image-selector/image-selector.component';
 import {MediaLightboxComponent} from './common/components/media-lightbox/media-lightbox.component';
+import {NotificationContainerComponent} from './common/components/notification-container/notification-container.component';
 import {SourceAssetGalleryComponent} from './common/components/source-asset-gallery/source-asset-gallery.component';
-import {AssignTagsDialogComponent} from './common/components/assign-tags-dialog/assign-tags-dialog.component';
 import {SharedModule} from './common/shared.module';
 import {AddVoiceDialogComponent} from './components/add-voice-dialog/add-voice-dialog.component';
 import {FooterComponent} from './footer/footer.component';
@@ -91,6 +86,8 @@ import {MediaGalleryComponent} from './gallery/media-gallery/media-gallery.compo
 import {HeaderComponent} from './header/header.component';
 import {HomeComponent} from './home/home.component';
 import {LoginComponent} from './login/login.component';
+import {RuntimeConfigService} from './runtime-config.service';
+import {UpscaleComponent} from './upscale/upscale.component';
 import {VideoComponent} from './video/video.component';
 import {VtoComponent} from './vto/vto.component';
 import {WorkbenchComponent} from './workbench/workbench.component';
@@ -106,7 +103,76 @@ import {GenericStepComponent} from './workflows/workflow-editor/step-components/
 import {WorkflowEditorComponent} from './workflows/workflow-editor/workflow-editor.component';
 import {WorkflowListComponent} from './workflows/workflow-list/workflow-list.component';
 import {WorkflowStatusPipe} from './workflows/workflow-status.pipe';
-import {UpscaleComponent} from './upscale/upscale.component';
+
+/**
+ * APP_INITIALIZER that fetches /assets/runtime-config.json before any other
+ * service is constructed. The OIDC client config is built from the loaded
+ * runtime config so the same image works in every environment.
+ */
+function initializeRuntimeConfig(
+  runtime: RuntimeConfigService,
+): () => Promise<void> {
+  return () => runtime.load().then(() => undefined);
+}
+
+/**
+ * Factory used by `angular-auth-oidc-client` to obtain its configuration
+ * asynchronously. It pulls the same runtime-config.json that the rest of the
+ * SPA reads from, so the SPA, the OIDC client, and the backend always agree
+ * on the issuer/audience.
+ */
+function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
+  const origin =
+    typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4200';
+
+  const config$: Observable<OpenIdConfiguration> = http
+    .get<{
+      backendURL: string;
+      oidc: {
+        authority: string;
+        clientId: string;
+        scope: string;
+        audience: string;
+        idpDisplayName: string;
+      };
+    }>('/assets/runtime-config.json')
+    .pipe(
+      map(remote => ({
+        authority: remote?.oidc?.authority,
+        redirectUrl: `${origin}/`,
+        postLogoutRedirectUri: `${origin}/login`,
+        clientId: remote?.oidc?.clientId,
+        scope: remote?.oidc?.scope || 'openid profile email',
+        responseType: 'code',
+        usePkce: true,
+        silentRenew: true,
+        useRefreshToken: true,
+        renewTimeBeforeTokenExpiresInSeconds: 60,
+        ignoreNonceAfterRefresh: true,
+        customParamsAuthRequest: remote?.oidc?.audience
+          ? {audience: remote.oidc.audience}
+          : undefined,
+        secureRoutes: ['/api/'],
+        logLevel: LogLevel.Warn,
+        historyCleanupOff: false,
+      })),
+      catchError(() =>
+        of<OpenIdConfiguration>({
+          authority: '',
+          redirectUrl: `${origin}/`,
+          postLogoutRedirectUri: `${origin}/login`,
+          clientId: '',
+          scope: 'openid profile email',
+          responseType: 'code',
+          usePkce: true,
+          silentRenew: false,
+          logLevel: LogLevel.Warn,
+        }),
+      ),
+    );
+
+  return new StsConfigHttpLoader(config$);
+}
 
 @NgModule({
   declarations: [
@@ -175,7 +241,6 @@ import {UpscaleComponent} from './upscale/upscale.component';
     MatSlideToggleModule,
     MatButtonToggleModule,
     ImageCropperComponent,
-    MatButtonToggleModule,
     MatSliderModule,
     NotificationContainerComponent,
     FlowPromptBoxComponent,
@@ -187,23 +252,19 @@ import {UpscaleComponent} from './upscale/upscale.component';
   providers: [
     provideClientHydration(),
     provideHttpClient(withInterceptorsFromDi()),
-    provideFirebaseApp(() => initializeApp(environment.firebase)),
-    provideAuth(() => getAuth()),
-    provideFirestore(() => getFirestore()),
-    provideAnalytics(() => getAnalytics()),
-    importProvidersFrom([
-      AngularFireModule.initializeApp(environment.firebase),
-      AngularFireAuthModule,
-      AngularFirestoreModule,
-      AngularFireDatabaseModule,
-      AngularFireAnalyticsModule,
-    ]),
     {
-      provide: ScreenTrackingService, // Automatically track screen views
+      provide: APP_INITIALIZER,
+      useFactory: initializeRuntimeConfig,
+      deps: [RuntimeConfigService],
+      multi: true,
     },
-    {
-      provide: UserTrackingService, // Automatically track user interactions
-    },
+    provideAuth({
+      loader: {
+        provide: StsConfigLoader,
+        useFactory: oidcConfigLoaderFactory,
+        deps: [HttpClient],
+      },
+    }),
     {provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true},
   ],
   bootstrap: [AppComponent],

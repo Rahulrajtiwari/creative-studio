@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,14 +18,24 @@ import pytest
 from fastapi import HTTPException
 
 from src.auth.auth_guard import RoleChecker, get_current_user
-from src.config.config_service import config_service
+from src.auth.oidc_verifier import (
+    TokenValidationError,
+    VerifiedClaims,
+    reset_oidc_verifier_for_tests,
+)
 from src.users.user_model import UserModel, UserRoleEnum
+
+
+@pytest.fixture(autouse=True)
+def _reset_verifier_singleton():
+    reset_oidc_verifier_for_tests()
+    yield
+    reset_oidc_verifier_for_tests()
 
 
 @pytest.fixture(name="mock_user_service")
 def fixture_mock_user_service():
     service = AsyncMock()
-    # Mock create_user_if_not_exists to return a user
     service.create_user_if_not_exists.return_value = UserModel(
         id=1,
         email="test@example.com",
@@ -35,25 +45,27 @@ def fixture_mock_user_service():
     return service
 
 
+def _claims(**overrides) -> VerifiedClaims:
+    base = {
+        "subject": "user-123",
+        "email": "test@example.com",
+        "email_verified": True,
+        "name": "Test User",
+        "picture": "http://example.com/pic.jpg",
+        "groups": [],
+        "raw": {},
+    }
+    base.update(overrides)
+    return VerifiedClaims(**base)
+
+
 class TestGetCurrentUser:
-    """Tests for get_current_user dependency."""
-
     @pytest.mark.anyio
-    @patch("src.auth.auth_guard.auth.verify_id_token")
-    async def test_get_current_user_local_success(
-        self, mock_verify, mock_user_service
-    ):
-        # Setup: Local environment
-        config_service.ENVIRONMENT = "local"
-        config_service.ALLOWED_ORGS_STR = ""
-
-        # Mock token verification
-        mock_verify.return_value = {
-            "email": "test@example.com",
-            "name": "Test User",
-            "picture": "http://example.com/pic.jpg",
-            "hd": "example.com",
-        }
+    @patch("src.auth.auth_guard.get_oidc_verifier")
+    async def test_success(self, mock_get_verifier, mock_user_service):
+        verifier = AsyncMock()
+        verifier.verify.return_value = _claims()
+        mock_get_verifier.return_value = verifier
 
         user = await get_current_user(
             token="valid_token",
@@ -61,57 +73,67 @@ class TestGetCurrentUser:
         )
 
         assert user.email == "test@example.com"
-        assert user.name == "Test User"
-        mock_user_service.create_user_if_not_exists.assert_called_once_with(
+        mock_user_service.create_user_if_not_exists.assert_awaited_once_with(
             email="test@example.com",
             name="Test User",
             picture="http://example.com/pic.jpg",
         )
 
     @pytest.mark.anyio
-    @patch("src.auth.auth_guard.auth.verify_id_token")
-    async def test_get_current_user_no_email(
-        self, mock_verify, mock_user_service
-    ):
-        config_service.ENVIRONMENT = "local"
-        mock_verify.return_value = {"name": "Test User"}  # Missing email
-
+    async def test_missing_token_returns_401(self, mock_user_service):
         with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(
-                token="valid_token", user_service=mock_user_service
-            )
-
-        assert exc_info.value.status_code == 403
-        assert "User identity could not be confirmed" in exc_info.value.detail
+            await get_current_user(token=None, user_service=mock_user_service)
+        assert exc_info.value.status_code == 401
 
     @pytest.mark.anyio
-    @patch("src.auth.auth_guard.auth.verify_id_token")
-    async def test_get_current_user_allowed_orgs_fail(
-        self,
-        mock_verify,
-        mock_user_service,
+    @patch("src.auth.auth_guard.get_oidc_verifier")
+    async def test_invalid_signature_returns_401(
+        self, mock_get_verifier, mock_user_service
     ):
-        config_service.ENVIRONMENT = "local"
-        config_service.ALLOWED_ORGS_STR = "allowed.com"
+        verifier = AsyncMock()
+        verifier.verify.side_effect = TokenValidationError("Invalid token: bad sig")
+        mock_get_verifier.return_value = verifier
 
-        mock_verify.return_value = {
-            "email": "test@example.com",
-            "name": "Test User",
-            "hd": "forbidden.com",
-        }
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user(
+                token="bad_token", user_service=mock_user_service
+            )
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.anyio
+    @patch("src.auth.auth_guard.get_oidc_verifier")
+    async def test_disallowed_domain_returns_403(
+        self, mock_get_verifier, mock_user_service
+    ):
+        verifier = AsyncMock()
+        verifier.verify.side_effect = TokenValidationError(
+            "Email domain 'forbidden.com' not in allowlist."
+        )
+        mock_get_verifier.return_value = verifier
 
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user(
                 token="valid_token", user_service=mock_user_service
             )
+        assert exc_info.value.status_code == 403
 
-        assert exc_info.value.status_code == 401
-        assert "not part of an allowed organization" in exc_info.value.detail
+    @pytest.mark.anyio
+    @patch("src.auth.auth_guard.get_oidc_verifier")
+    async def test_missing_email_returns_403(
+        self, mock_get_verifier, mock_user_service
+    ):
+        verifier = AsyncMock()
+        verifier.verify.return_value = _claims(email=None)
+        mock_get_verifier.return_value = verifier
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user(
+                token="valid_token", user_service=mock_user_service
+            )
+        assert exc_info.value.status_code == 403
 
 
 class TestRoleChecker:
-    """Tests for RoleChecker class."""
-
     def test_role_checker_authorized(self):
         checker = RoleChecker(allowed_roles=[UserRoleEnum.ADMIN])
         user = UserModel(
@@ -120,9 +142,7 @@ class TestRoleChecker:
             roles=["admin"],
             name="Admin User",
         )
-
-        # Should not raise exception
-        checker(user=user)
+        assert checker(user=user) is user
 
     def test_role_checker_forbidden(self):
         checker = RoleChecker(allowed_roles=[UserRoleEnum.ADMIN])
@@ -132,9 +152,6 @@ class TestRoleChecker:
             roles=["user"],
             name="Regular User",
         )
-
         with pytest.raises(HTTPException) as exc_info:
             checker(user=user)
-
         assert exc_info.value.status_code == 403
-        assert "do not have sufficient permissions" in exc_info.value.detail

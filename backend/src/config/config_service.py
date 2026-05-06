@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Application configuration loaded from environment variables.
+
+In production (GKE) every value comes from ConfigMaps and Secrets mounted as
+env vars on the pod. The optional .env file path is kept for local docker
+compose only.
+"""
+
+from __future__ import annotations
 
 from typing import Any
 
@@ -21,16 +29,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ConfigService(BaseSettings):
-    """Manages application configuration using Pydantic.
-    It automatically reads from environment variables, provides type safety,
-    and fails fast if critical settings are missing.
-    """
-
-    # This tells Pydantic to look for a .env file for local development.
-    # In production (e.g., Cloud Run), where this file doesn't exist,
-    # Pydantic will automatically and correctly fall back to using
-    # system environment variables.
-    # The path is relative to this file's location (src/config/).
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",
@@ -38,7 +36,9 @@ class ConfigService(BaseSettings):
         extra="ignore",
     )
 
-    # --- Core Project Settings ---
+    # ------------------------------------------------------------------
+    # Core project settings
+    # ------------------------------------------------------------------
     PROJECT_ID: str = ""
     LOCATION: str = "global"
     ENVIRONMENT: str = "development"
@@ -47,99 +47,137 @@ class ConfigService(BaseSettings):
     LOG_LEVEL: str = "INFO"
     INIT_VERTEX: bool = True
 
-    # --- Google Identity ---
-    GOOGLE_TOKEN_AUDIENCE: str = ""
-    ALLOWED_ORGS_STR: str = Field(
-        default="", alias="IDENTITY_PLATFORM_ALLOWED_ORGS"
+    # When the backend sits behind the same internal Ingress as the SPA the
+    # browser uses same-origin requests, so CORS can be locked down.
+    BEHIND_INGRESS: bool = False
+    TRUSTED_HOSTS: str = "*"  # Comma-separated list consumed by TrustedHostMiddleware
+
+    # ------------------------------------------------------------------
+    # OIDC (replaces Firebase Auth + Identity Platform)
+    # ------------------------------------------------------------------
+    OIDC_ISSUER: str = ""
+    OIDC_AUDIENCES: str = Field(
+        default="",
+        description="Comma-separated list of accepted JWT audiences.",
     )
+    OIDC_ALLOWED_EMAIL_DOMAINS: str = Field(
+        default="",
+        description="Optional comma-separated email domain allowlist.",
+    )
+    OIDC_ALLOWED_GROUPS_CLAIM: str = "groups"
+    OIDC_ALLOWED_GROUPS: str = Field(
+        default="",
+        description="Optional comma-separated group allowlist; the user must be a member of at least one.",
+    )
+    OIDC_AUTHORIZED_PARTY: str = ""
+    OIDC_REQUIRE_EMAIL_VERIFIED: bool = True
+    JWKS_CACHE_TTL_SEC: int = 3600
 
-    # --- Storage ---
-    # The defaults will be set in the validator below to prevent recursion.
+    # ------------------------------------------------------------------
+    # Storage
+    # ------------------------------------------------------------------
     GENMEDIA_BUCKET: str = ""
+    SIGNING_SA_EMAIL: str = ""
 
-    # --- Gemini ---
+    # ------------------------------------------------------------------
+    # Gemini / Imagen / Veo / Lyria / VTO
+    # ------------------------------------------------------------------
     GEMINI_MODEL_ID: str = "gemini-2.5-pro"
     GEMINI_AUDIO_ANALYSIS_MODEL_ID: str = "gemini-2.5-pro"
-
-    # --- Database Configuration ---
-    INSTANCE_CONNECTION_NAME: str = ""
-    DB_USER: str = "postgres"
-    DB_PASS: str = "password"
-    DB_NAME: str = "creative_studio"
-    USE_CLOUD_SQL_AUTH_PROXY: bool = False
-    DB_HOST: str = "localhost"
-    DB_PORT: str = "5432"
-
-    # --- Veo ---
     VEO_MODEL_ID: str = "veo-2.0-generate-001"
-
-    # --- VTO ---
     VTO_MODEL_ID: str = "virtual-try-on-001"
-
-    # --- Lyria ---
     LYRIA_MODEL_VERSION: str = "lyria-002"
     LYRIA_PROJECT_ID: str = ""
-
-    # --- Imagen ---
-    MODEL_IMAGEN_PRODUCT_RECONTEXT: str = (
-        "imagen-product-recontext-preview-06-30"
-    )
+    MODEL_IMAGEN_PRODUCT_RECONTEXT: str = "imagen-product-recontext-preview-06-30"
     IMAGEN_GENERATED_SUBFOLDER: str = "generated_images"
     IMAGEN_EDITED_SUBFOLDER: str = "edited_images"
     IMAGEN_RECONTEXT_SUBFOLDER: str = "recontext_images"
 
-    # --- Email Service ---
-    SENDER_EMAIL: str = (
-        ""  # The email address to send from (e.g., no-reply@your-domain.com)
-    )
+    # ------------------------------------------------------------------
+    # Database (Cloud SQL via Auth Proxy sidecar in GKE)
+    # ------------------------------------------------------------------
+    INSTANCE_CONNECTION_NAME: str = ""
+    DB_USER: str = "studio_user"
+    DB_PASS: str = ""  # Empty => use IAM auth via the proxy sidecar.
+    DB_NAME: str = "creative_studio"
+    USE_CLOUD_SQL_AUTH_PROXY: bool = True
+    DB_HOST: str = "127.0.0.1"
+    DB_PORT: str = "5432"
+    DB_USE_IAM_AUTH: bool = False  # Set true when password is empty and proxy is launched with --auto-iam-authn.
+
+    # ------------------------------------------------------------------
+    # Email / admin
+    # ------------------------------------------------------------------
+    SENDER_EMAIL: str = ""
     ADMIN_USER_EMAIL: str = "system"
 
-    # --- Workflows ---
+    # ------------------------------------------------------------------
+    # Workflows
+    # ------------------------------------------------------------------
     WORKFLOWS_LOCATION: str = "us-central1"
-    WORKFLOWS_EXECUTOR_URL: str = (
-        "http://localhost:8080"  # This service could be deployed alone in the future
-    )
+    WORKFLOWS_EXECUTOR_URL: str = "http://localhost:8080"
     BACKEND_SERVICE_ACCOUNT_EMAIL: str = ""
 
+    # ------------------------------------------------------------------
+    # Validators
+    # ------------------------------------------------------------------
     @model_validator(mode="before")
     @classmethod
     def get_default_project_id(cls, values: Any) -> Any:
-        """Sets the default PROJECT_ID from ADC if not provided in the environment."""
         if not values.get("PROJECT_ID"):
             try:
                 _, project_id = google.auth.default()
                 if project_id:
                     values["PROJECT_ID"] = project_id
             except DefaultCredentialsError:
-                pass  # Fail gracefully, let required fields catch this if needed.
+                pass
         return values
 
-    # <<< FIX 2: New validator to handle dependent default values >>>
     @model_validator(mode="after")
     def set_dependent_defaults(self) -> "ConfigService":
-        """Sets default values for fields that depend on other fields (like PROJECT_ID),
-        after the initial values have been loaded and validated.
-        """
         if not self.PROJECT_ID:
             raise ValueError(
                 "PROJECT_ID could not be determined. Please set it via environment variable.",
             )
 
-        # If these fields were not set by environment variables, set their default now.
         if not self.GENMEDIA_BUCKET:
             self.GENMEDIA_BUCKET = f"{self.PROJECT_ID}-assets"
 
+        if self.ENVIRONMENT == "production":
+            if not self.OIDC_ISSUER:
+                raise ValueError("OIDC_ISSUER is required in production.")
+            if not self.OIDC_AUDIENCES_LIST:
+                raise ValueError("OIDC_AUDIENCES must contain at least one audience in production.")
+
         return self
 
-    # This computed field cleanly separates the raw string from the processed set.
+    # ------------------------------------------------------------------
+    # Computed convenience properties
+    # ------------------------------------------------------------------
     @computed_field
     @property
-    def ALLOWED_ORGS(self) -> set[str]:
-        return set(
-            org.strip()
-            for org in self.ALLOWED_ORGS_STR.split(",")
-            if org.strip()
-        )
+    def OIDC_AUDIENCES_LIST(self) -> set[str]:
+        return {a.strip() for a in self.OIDC_AUDIENCES.split(",") if a.strip()}
+
+    @computed_field
+    @property
+    def OIDC_ALLOWED_EMAIL_DOMAINS_LIST(self) -> set[str]:
+        return {
+            d.strip().lower().lstrip("@")
+            for d in self.OIDC_ALLOWED_EMAIL_DOMAINS.split(",")
+            if d.strip()
+        }
+
+    @computed_field
+    @property
+    def OIDC_ALLOWED_GROUPS_LIST(self) -> set[str]:
+        return {g.strip() for g in self.OIDC_ALLOWED_GROUPS.split(",") if g.strip()}
+
+    @computed_field
+    @property
+    def TRUSTED_HOSTS_LIST(self) -> list[str]:
+        items = [h.strip() for h in self.TRUSTED_HOSTS.split(",") if h.strip()]
+        return items or ["*"]
 
     @computed_field
     @property
@@ -152,5 +190,4 @@ class ConfigService(BaseSettings):
         return f"{self.GENMEDIA_BUCKET}/images"
 
 
-# Create a single, cached instance of the settings to be used throughout the app.
 config_service = ConfigService()

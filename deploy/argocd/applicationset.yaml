@@ -1,0 +1,74 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: creative-studio
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          - env: dev
+            cluster: gke-dev
+            server: "https://kubernetes.default.svc"
+            valuesFile: values-dev.yaml
+          - env: qat
+            cluster: gke-qat
+            server: "https://gke-qat.example.internal"
+            valuesFile: values-qat.yaml
+          - env: prd
+            cluster: gke-prd
+            server: "https://gke-prd.example.internal"
+            valuesFile: values-prd.yaml
+  template:
+    metadata:
+      name: 'creative-studio-{{ .env }}'
+      labels:
+        app.kubernetes.io/part-of: creative-studio
+        environment: '{{ .env }}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: creative-studio
+      source:
+        repoURL: "https://your-internal-git/creative-studio.git"
+        targetRevision: HEAD
+        path: deploy/helm/creative-studio
+        helm:
+          releaseName: creative-studio
+          valueFiles:
+            - '{{ .valuesFile }}'
+          # Image tags are written here by the CI image-bumper bot once a
+          # successful Cloud Build run resolves a digest reference.
+          parameters: []
+      destination:
+        server: '{{ .server }}'
+        namespace: creative-studio
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true
+          - PruneLast=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas       # owned by HPA
+        - group: networking.k8s.io
+          kind: Ingress
+          jsonPointers:
+            - /metadata/annotations/ingress.kubernetes.io~1backends
+            - /metadata/annotations/ingress.kubernetes.io~1url-map
+            - /status

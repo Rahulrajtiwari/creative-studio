@@ -11,193 +11,83 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for Database."""
+"""Tests for the simplified asyncpg-only database module."""
 
-
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from src.config.config_service import config_service
-from src.database import (
-    DatabaseConnector,
-    WorkerDatabase,
-    cleanup_connector,
-    get_conn_string,
-    get_connection,
-    get_db,
-)
+from src.database import WorkerDatabase, _build_async_url, cleanup_connector, get_db
 
 
-def test_get_conn_string_proxy():
-    with patch.object(config_service, "USE_CLOUD_SQL_AUTH_PROXY", True):
-        with (
-            patch.object(config_service, "DB_USER", "u"),
-            patch.object(
-                config_service,
-                "DB_PASS",
-                "p",
-            ),
-            patch.object(config_service, "DB_HOST", "h"),
-            patch.object(
-                config_service,
-                "DB_PORT",
-                "5432",
-            ),
-            patch.object(
-                config_service,
-                "DB_NAME",
-                "d",
-            ),
-        ):
-            res = get_conn_string()
-            assert "u:p@h:5432/d" in res
-
-
-def test_get_conn_string_instance():
+def test_build_url_with_password():
     with (
-        patch.object(config_service, "USE_CLOUD_SQL_AUTH_PROXY", False),
-        patch.object(
-            config_service,
-            "INSTANCE_CONNECTION_NAME",
-            "inst",
-        ),
-    ):
-        res = get_conn_string()
-        assert res == "postgresql+asyncpg://"
-
-
-def test_get_conn_string_fallback():
-    with (
-        patch.object(config_service, "USE_CLOUD_SQL_AUTH_PROXY", False),
-        patch.object(
-            config_service,
-            "INSTANCE_CONNECTION_NAME",
-            None,
-        ),
+        patch.object(config_service, "DB_USE_IAM_AUTH", False),
         patch.object(config_service, "DB_USER", "u"),
-        patch.object(
-            config_service,
-            "DB_PASS",
-            "p",
-        ),
+        patch.object(config_service, "DB_PASS", "p"),
         patch.object(config_service, "DB_HOST", "h"),
-        patch.object(
-            config_service,
-            "DB_PORT",
-            "5432",
-        ),
-        patch.object(
-            config_service,
-            "DB_NAME",
-            "d",
-        ),
+        patch.object(config_service, "DB_PORT", "5432"),
+        patch.object(config_service, "DB_NAME", "d"),
     ):
-        res = get_conn_string()
-        assert "u:p@h:5432/d" in res
+        assert _build_async_url() == "postgresql+asyncpg://u:p@h:5432/d"
 
 
-@pytest.mark.anyio
-async def test_get_connection_proxy():
-    with patch.object(config_service, "USE_CLOUD_SQL_AUTH_PROXY", True):
-        with patch("asyncpg.connect", new_callable=AsyncMock) as mock_connect:
-            mock_connect.return_value = "mock_conn_proxy"
-            res = await get_connection()
-            assert res == "mock_conn_proxy"
-
-
-@pytest.mark.anyio
-async def test_get_connection_local_no_instance():
+def test_build_url_iam_omits_password():
     with (
-        patch.object(config_service, "USE_CLOUD_SQL_AUTH_PROXY", False),
-        patch.object(
-            config_service,
-            "INSTANCE_CONNECTION_NAME",
-            None,
-        ),
-        patch("asyncpg.connect", new_callable=AsyncMock) as mock_connect,
+        patch.object(config_service, "DB_USE_IAM_AUTH", True),
+        patch.object(config_service, "DB_USER", "u@iam"),
+        patch.object(config_service, "DB_PASS", "ignored"),
+        patch.object(config_service, "DB_HOST", "127.0.0.1"),
+        patch.object(config_service, "DB_PORT", "5432"),
+        patch.object(config_service, "DB_NAME", "d"),
     ):
-        mock_connect.return_value = "mock_conn_local"
-        res = await get_connection()
-        assert res == "mock_conn_local"
+        assert _build_async_url() == "postgresql+asyncpg://u@iam@127.0.0.1:5432/d"
 
 
-@pytest.mark.anyio
-async def test_get_connection_cloud_sql():
+def test_build_url_empty_password_omits_password():
     with (
-        patch.object(config_service, "USE_CLOUD_SQL_AUTH_PROXY", False),
-        patch.object(
-            config_service,
-            "INSTANCE_CONNECTION_NAME",
-            "projects/p/locations/l/instances/i",
-        ),
+        patch.object(config_service, "DB_USE_IAM_AUTH", False),
+        patch.object(config_service, "DB_USER", "u"),
+        patch.object(config_service, "DB_PASS", ""),
+        patch.object(config_service, "DB_HOST", "h"),
+        patch.object(config_service, "DB_PORT", "5432"),
+        patch.object(config_service, "DB_NAME", "d"),
     ):
-        mock_connector = AsyncMock()
-        mock_connector.connect_async = AsyncMock(return_value="cloud_conn")
-
-        # Patch DatabaseConnector singleton get_instance
-        with patch.object(DatabaseConnector, "get_instance") as mock_inst:
-            mock_inst_obj = MagicMock()
-            mock_inst_obj.get_connector.return_value = mock_connector
-            mock_inst.return_value = mock_inst_obj
-
-            res = await get_connection()
-            assert res == "cloud_conn"
+        assert _build_async_url() == "postgresql+asyncpg://u@h:5432/d"
 
 
 @pytest.mark.anyio
-async def test_cleanup_connector():
-    with patch.object(DatabaseConnector, "get_instance") as mock_inst:
-        mock_inst_obj = MagicMock()
-        mock_inst_obj.cleanup = AsyncMock()
-        mock_inst.return_value = mock_inst_obj
-
+async def test_cleanup_connector_disposes_engine():
+    with patch("src.database.engine.dispose") as mock_dispose:
+        mock_dispose.return_value = None
         await cleanup_connector()
-        mock_inst_obj.cleanup.assert_called_once()
+        mock_dispose.assert_awaited_once()
 
 
 @pytest.mark.anyio
-async def test_worker_database_local():
-    with patch.object(config_service, "INSTANCE_CONNECTION_NAME", None):
-        # WorkerDatabase creates Engine and sessionmaker
-        async with WorkerDatabase() as sessionmaker:
-            assert sessionmaker is not None
+async def test_worker_database_creates_and_disposes_engine():
+    fake_engine = type(
+        "FE",
+        (),
+        {"dispose": (lambda self: None)},
+    )
 
-
-@pytest.mark.anyio
-async def test_worker_database_cloud_sql():
     with (
-        patch.object(config_service, "INSTANCE_CONNECTION_NAME", "inst"),
-        patch.object(
-            config_service,
-            "USE_CLOUD_SQL_AUTH_PROXY",
-            False,
-        ),
+        patch("src.database.create_async_engine") as mock_create_engine,
+        patch("src.database.async_sessionmaker") as mock_sessionmaker_cls,
     ):
-        # We need to mock the Connector itself that gets initialized inside __aenter__
-        # Or mock the AsyncEngine creation inside
-        with (
-            patch("src.database.create_async_engine") as mock_create_engine,
-            patch(
-                "src.database.Connector",
-            ) as mock_connector_cls,
-        ):
-            mock_create_engine.return_value = AsyncMock()
-            mock_connector_inst = MagicMock()
-            mock_connector_inst.close_async = AsyncMock()
-            mock_connector_cls.return_value = mock_connector_inst
+        mock_engine = mock_create_engine.return_value
+        mock_engine.dispose = type(fake_engine).dispose.__get__(mock_engine)
 
-            async with WorkerDatabase() as sessionmaker:
-                assert sessionmaker is not None
+        mock_sessionmaker_cls.return_value = "sessionmaker"
+
+        async with WorkerDatabase() as sm:
+            assert sm == "sessionmaker"
+
+        mock_create_engine.assert_called_once()
 
 
-def test_database_connector_singleton():
-    inst1 = DatabaseConnector.get_instance()
-    inst2 = DatabaseConnector.get_instance()
-    assert inst1 is inst2
-
-
-def test_get_db_yields():
-    # get_db is AsyncGenerator
+def test_get_db_returns_async_generator():
     gen = get_db()
     assert gen is not None

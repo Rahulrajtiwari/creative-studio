@@ -1,0 +1,140 @@
+{{- if .Values.networkPolicies.enabled }}
+# -----------------------------------------------------------------------------
+# Default-deny ingress AND egress for everything in the namespace,
+# augmented with the targeted allow rules below.
+# -----------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "cs.fullname" . }}-default-deny
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow Google Cloud Internal LB / GKE health-checker IPs to reach the
+# frontend & backend pods (NEG mode performs container-level health checks).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "cs.fullname" . }}-allow-ingress-lb-and-healthchecks
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: creative-studio
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # GCP Load Balancer / Health-Check ranges (regional internal LB).
+        - ipBlock:
+            cidr: 35.191.0.0/16
+        - ipBlock:
+            cidr: 130.211.0.0/22
+        - ipBlock:
+            cidr: 209.85.152.0/22
+        - ipBlock:
+            cidr: 209.85.204.0/22
+      ports:
+        - protocol: TCP
+          port: {{ .Values.backend.containerPort }}
+        - protocol: TCP
+          port: {{ .Values.frontend.containerPort }}
+---
+# Allow frontend pods to call the backend Service over the API path.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "cs.fullname" . }}-allow-fe-to-be
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/part-of: creative-studio
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: frontend
+              app.kubernetes.io/part-of: creative-studio
+      ports:
+        - protocol: TCP
+          port: {{ .Values.backend.containerPort }}
+---
+# Egress: kube-dns + GoogleAPIs (private) + Cloud SQL PSA + corp proxy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "cs.fullname" . }}-allow-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: creative-studio
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: {{ .Values.networkPolicies.egress.dnsPort }}
+        - protocol: TCP
+          port: {{ .Values.networkPolicies.egress.dnsPort }}
+    - to:
+        {{- range .Values.networkPolicies.egress.googleApisCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- with .Values.networkPolicies.egress.cloudSqlPsaCidrs }}
+    - to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 3307
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    {{- with .Values.networkPolicies.egress.extraAllowCidrs }}
+    - to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
+    # Frontend -> Backend in-cluster Service traffic.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+              app.kubernetes.io/part-of: creative-studio
+      ports:
+        - protocol: TCP
+          port: {{ .Values.backend.containerPort }}
+{{- end }}

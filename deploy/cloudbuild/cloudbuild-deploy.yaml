@@ -1,0 +1,90 @@
+# =============================================================================
+# Cloud Build deploy pipeline — `helm upgrade --install` against private GKE.
+#
+# Authenticates to the cluster control plane via the GKE auth plugin (the
+# control plane endpoint is private; this build MUST run on a Private Worker
+# Pool peered to the cluster's VPC, OR the build trigger must use Connect
+# Gateway with `gcloud container fleet memberships get-credentials`).
+#
+# Substitutions (override per trigger):
+#   _ENV                 dev | qat | prd
+#   _CLUSTER_NAME        Target GKE cluster name
+#   _CLUSTER_REGION      Region of the cluster
+#   _NAMESPACE           K8s namespace (default: creative-studio)
+#   _BACKEND_IMAGE_TAG   Tag/SHA produced by cloudbuild-backend.yaml
+#   _FRONTEND_IMAGE_TAG  Tag/SHA produced by cloudbuild-frontend.yaml
+#   _CHART_PATH          Relative path to chart (deploy/helm/creative-studio)
+# =============================================================================
+
+steps:
+  # 1. Fetch GKE credentials. Use the Connect Gateway when the control plane
+  #    is fully private and the build pool cannot peer to its VPC; otherwise
+  #    a peered private pool can call the private endpoint directly.
+  - id: gke-auth
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud container clusters get-credentials "${_CLUSTER_NAME}" \
+          --region "${_CLUSTER_REGION}" \
+          --project "${_PROJECT_ID}" \
+          --internal-ip
+
+  # 2. Render & apply the chart with Helm.
+  - id: helm-deploy
+    name: alpine/helm:3.16.1
+    entrypoint: sh
+    waitFor: ["gke-auth"]
+    args:
+      - -ceu
+      - |
+        export KUBECONFIG=/builder/home/.kube/config
+        helm upgrade --install creative-studio "${_CHART_PATH}" \
+          --namespace "${_NAMESPACE}" \
+          --create-namespace \
+          --atomic \
+          --timeout 15m \
+          -f "${_CHART_PATH}/values-${_ENV}.yaml" \
+          --set backend.image.tag="${_BACKEND_IMAGE_TAG}" \
+          --set frontend.image.tag="${_FRONTEND_IMAGE_TAG}" \
+          --set migrations.image.tag="${_BACKEND_IMAGE_TAG}"
+
+  # 3. Smoke test from inside the cluster.
+  - id: smoke-test
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    waitFor: ["helm-deploy"]
+    args:
+      - -ceu
+      - |
+        kubectl -n "${_NAMESPACE}" rollout status deploy/creative-studio-backend --timeout=5m
+        kubectl -n "${_NAMESPACE}" rollout status deploy/creative-studio-frontend --timeout=5m
+        # exec into a backend pod and call /readyz
+        POD=$(kubectl -n "${_NAMESPACE}" get pod -l app.kubernetes.io/component=backend -o name | head -1)
+        kubectl -n "${_NAMESPACE}" exec "$$POD" -c app -- \
+          sh -lc "wget -qO- http://localhost:8080/readyz" | tee /workspace/readyz.json
+
+substitutions:
+  _ENV: dev
+  _CLUSTER_NAME: ""
+  _CLUSTER_REGION: us-central1
+  _PROJECT_ID: ${PROJECT_ID}
+  _NAMESPACE: creative-studio
+  _BACKEND_IMAGE_TAG: ""
+  _FRONTEND_IMAGE_TAG: ""
+  _CHART_PATH: deploy/helm/creative-studio
+
+options:
+  workerPool: projects/${_PROJECT_ID}/locations/${_CLUSTER_REGION}/workerPools/${_PRIVATE_POOL_NAME}
+  logging: CLOUD_LOGGING_ONLY
+  substitution_option: ALLOW_LOOSE
+  defaultLogsBucketBehavior: REGIONAL_USER_OWNED_BUCKET
+  requestedVerifyOption: VERIFIED
+  machineType: E2_STANDARD_2
+
+timeout: 1800s
+
+tags:
+  - creative-studio
+  - deploy

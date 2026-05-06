@@ -1,0 +1,28 @@
+# -----------------------------------------------------------------------------
+# Base kustomization: render the Helm chart, then let environment overlays
+# layer additional patches.
+#
+# Usage (requires `kustomize build --enable-helm`):
+#   kustomize build --enable-helm deploy/kustomize/overlays/dev | kubectl apply -f -
+# -----------------------------------------------------------------------------
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: creative-studio
+
+helmCharts:
+  - name: creative-studio
+    releaseName: creative-studio
+    namespace: creative-studio
+    version: 1.0.0
+    repo: ""                     # local path chart; repo left blank
+    # `path` resolves relative to this kustomization.yaml.
+    # Set `valuesFile` per overlay; base intentionally provides no values
+    # because mandatory inputs (image registry, OIDC issuer, etc.) MUST be
+    # supplied by an overlay.
+    valuesInline: {}
+    includeCRDs: false
+    skipTests: true
+    # `chartHome: ../../../helm` would be set on the wrapping overlay if you
+    # use a chart pulled from a remote OCI registry; here we use --include-dir
+    # via the overlays.

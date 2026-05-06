@@ -1,0 +1,21 @@
+apiVersion: v2
+name: creative-studio
+description: |
+  Production Helm chart for the Creative Studio Generative AI application
+  on a private GKE cluster. Deploys the FastAPI backend (with a cloud-sql-proxy
+  sidecar), the Nginx-served Angular frontend, an internal HTTPS Load Balancer
+  Ingress, NetworkPolicies, HPAs, PDBs, BackendConfig/FrontendConfig, and an
+  Alembic migrations Job.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.28.0-0"
+home: https://example.com/creative-studio
+keywords:
+  - genai
+  - vertex-ai
+  - gke
+  - private
+  - oidc
+maintainers:
+  - name: Platform Team

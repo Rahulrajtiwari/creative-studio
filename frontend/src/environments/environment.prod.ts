@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,24 @@
  * limitations under the License.
  */
 
+/**
+ * Production build constants. The OIDC values here are placeholders; in
+ * production the SPA fetches /assets/runtime-config.json on boot (via the
+ * APP_INITIALIZER in app.module.ts) and overrides these so a single image
+ * works for every environment.
+ */
 export const environment = {
-  firebase: {
-    apiKey: 'FIREBASE_API_KEY_PLACEHOLDER',
-    authDomain: 'FIREBASE_AUTH_DOMAIN_PLACEHOLDER',
-    projectId: 'FIREBASE_PROJECT_ID_PLACEHOLDER',
-    storageBucket: 'FIREBASE_STORAGE_BUCKET_PLACEHOLDER',
-    messagingSenderId: 'FIREBASE_SENDER_ID_PLACEHOLDER',
-    appId: 'FIREBASE_APP_ID_PLACEHOLDER',
-    measurementId: 'FIREBASE_MEASUREMENT_ID_PLACEHOLDER',
-  },
   production: true,
   isLocal: false,
-  backendURL: 'BACKEND_URL_PLACEHOLDER',
+  backendURL: '/api',
   EMAIL_REGEX:
     /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
   ADMIN: 'admin',
-  GOOGLE_CLIENT_ID: 'GOOGLE_CLIENT_ID_PLACEHOLDER',
+  oidc: {
+    authority: 'OIDC_AUTHORITY_PLACEHOLDER',
+    clientId: 'OIDC_CLIENT_ID_PLACEHOLDER',
+    scope: 'openid profile email',
+    audience: 'OIDC_AUDIENCE_PLACEHOLDER',
+    idpDisplayName: 'Corporate SSO',
+  },
 };

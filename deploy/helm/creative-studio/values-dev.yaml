@@ -1,0 +1,73 @@
+# -----------------------------------------------------------------------------
+# DEV overlay. Replace placeholders with values produced by
+# `terraform output -raw helm_values_yaml` from infra/environments/dev.
+# -----------------------------------------------------------------------------
+global:
+  projectId: "creative-studio-dev"
+  region: "us-central1"
+  environment: "dev"
+  appHost: "creative-studio.dev.corp.example.com"
+
+image:
+  registry: "us-central1-docker.pkg.dev/creative-studio-dev/platform"
+
+backend:
+  replicaCount: 2
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 6
+  serviceAccount:
+    googleServiceAccount: "creative-studio-backend@creative-studio-dev.iam.gserviceaccount.com"
+  image:
+    tag: "REPLACE_AT_DEPLOY"
+  config:
+    GENMEDIA_BUCKET: "creative-studio-dev-genmedia"
+    VIDEO_BUCKET: "creative-studio-dev-video"
+    IMAGE_BUCKET: "creative-studio-dev-image"
+    OIDC_ISSUER: "https://login.example.com/idp"
+    OIDC_AUDIENCES: "creative-studio-dev"
+    OIDC_ALLOWED_EMAIL_DOMAINS: "example.com"
+    OIDC_ALLOWED_GROUPS: "creative-studio-dev-users,creative-studio-admins"
+    DB_USER: "creative-studio-backend"
+
+cloudSqlProxy:
+  instanceConnectionName: "creative-studio-dev:us-central1:creative-studio-dev"
+
+frontend:
+  replicaCount: 2
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 4
+  image:
+    tag: "REPLACE_AT_DEPLOY"
+  config:
+    OIDC_AUTHORITY: "https://login.example.com/idp"
+    OIDC_CLIENT_ID: "creative-studio-dev"
+    OIDC_AUDIENCE: "creative-studio-dev"
+    OIDC_IDP_DISPLAY_NAME: "Corporate SSO (Dev)"
+
+ingress:
+  preSharedCertName: "creative-studio-dev-ilb-cert"
+  staticIpName: "creative-studio-dev-ilb-ip"
+  hosts:
+    - host: "creative-studio.dev.corp.example.com"
+      paths:
+        - path: /api
+          pathType: Prefix
+          serviceName: backend
+        - path: /
+          pathType: Prefix
+          serviceName: frontend
+
+migrations:
+  image:
+    tag: "REPLACE_AT_DEPLOY"
+
+externalSecrets:
+  enabled: true
+  data: {}
+
+networkPolicies:
+  egress:
+    cloudSqlPsaCidrs:
+      - "10.50.0.0/24"

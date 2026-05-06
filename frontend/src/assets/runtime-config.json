@@ -1,0 +1,10 @@
+{
+  "backendURL": "/api",
+  "oidc": {
+    "authority": "",
+    "clientId": "",
+    "scope": "openid profile email",
+    "audience": "",
+    "idpDisplayName": "Corporate SSO"
+  }
+}

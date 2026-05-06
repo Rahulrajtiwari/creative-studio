@@ -1,0 +1,32 @@
+{{- $name := include "cs.fullname" . -}}
+{{- $host := include "cs.effective.appHost" . -}}
+
+============================================================================
+{{ .Chart.Name }} {{ .Chart.Version }} ({{ .Values.global.environment }}) deployed.
+============================================================================
+
+Release name : {{ .Release.Name }}
+Namespace    : {{ .Release.Namespace }}
+App URL      : https://{{ $host }}
+
+Important checks (run from a host inside the corporate network):
+
+1. Verify the Internal HTTPS Load Balancer is healthy:
+     kubectl -n {{ .Release.Namespace }} get ingress {{ $name }} -o wide
+
+2. Check Pods are Ready:
+     kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+3. Tail backend logs:
+     kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "cs.backend.fullname" . }} -c app -f
+
+4. Confirm OIDC discovery is reachable from the cluster:
+     kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "cs.backend.fullname" . }} -c app -- \
+       curl -sS {{ .Values.backend.config.OIDC_ISSUER }}/.well-known/openid-configuration | head
+
+5. Confirm Cloud SQL connectivity from the proxy sidecar:
+     kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "cs.backend.fullname" . }} -c cloud-sql-proxy -- \
+       wget -qO- http://localhost:9090/readiness
+
+NOTE: This application is intentionally only reachable from corporate networks
+(VDI/VPN/Interconnect/secure proxy). External users CANNOT reach it.

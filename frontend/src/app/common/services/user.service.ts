@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,72 +14,69 @@
  * limitations under the License.
  */
 
-import {Injectable, PLATFORM_ID, inject} from '@angular/core';
-import {
-  Firestore,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-} from '@angular/fire/firestore';
-import {UserModel} from '../models/user.model';
-import {environment} from '../../../environments/environment';
-import {HttpClient} from '@angular/common/http';
-import {Observable} from 'rxjs';
-import {user} from '@angular/fire/auth';
 import {isPlatformBrowser} from '@angular/common';
+import {HttpClient} from '@angular/common/http';
+import {Injectable, PLATFORM_ID, inject} from '@angular/core';
+import {Observable} from 'rxjs';
 
-const USER_COLLECTION = 'users';
-interface LooseObject {
-  [key: string]: any;
+import {RuntimeConfigService} from '../../runtime-config.service';
+import {UserModel} from '../models/user.model';
+
+interface BadgeInfoRequest {
+  email: string;
+  [key: string]: unknown;
 }
 
-const badgeURL = `${environment.backendURL}/`;
+const USER_DETAILS_KEY = 'USER_DETAILS';
 
-@Injectable({
-  providedIn: 'root',
-})
+@Injectable({providedIn: 'root'})
 export class UserService {
-  private readonly firestore: Firestore = inject(Firestore);
   private platformId = inject(PLATFORM_ID);
+  private http = inject(HttpClient);
+  private runtimeConfig = inject(RuntimeConfigService);
 
-  constructor(private http: HttpClient) {}
-
-  async get(uid: string): Promise<UserModel> {
-    const userRef = doc(this.firestore, USER_COLLECTION, uid);
-    const userDoc = await getDoc(userRef);
-    return userDoc.data() as UserModel;
+  private get apiBase(): string {
+    return this.runtimeConfig.config.backendURL;
   }
 
-  async delete(uid: string) {
-    const userRef = doc(this.firestore, USER_COLLECTION, uid);
-    await deleteDoc(userRef);
+  /** Fetch a user profile from the backend. */
+  get(uid: string): Observable<UserModel> {
+    return this.http.get<UserModel>(`${this.apiBase}/users/${uid}`);
+  }
+
+  /** Soft-delete a user via the backend. Hard delete is admin-only. */
+  delete(uid: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiBase}/users/${uid}`);
   }
 
   getUserDetails(): UserModel | null {
     if (!isPlatformBrowser(this.platformId)) return null;
-
-    if (localStorage.getItem('USER_DETAILS') !== null) {
-      const userObj = localStorage.getItem('USER_DETAILS');
-      return JSON.parse(userObj || '{}') as UserModel;
-    } else {
-      const userDetails: LooseObject = {};
-      userDetails['name'] = '';
-      userDetails['email'] = '';
-      userDetails['photoURL'] = '';
-      userDetails['domain'] = '';
-      userDetails['roles'] = [];
-      return userDetails as UserModel;
+    const raw = localStorage.getItem(USER_DETAILS_KEY);
+    if (!raw) {
+      return {
+        name: '',
+        email: '',
+        picture: '',
+        roles: [],
+      } as unknown as UserModel;
+    }
+    try {
+      return JSON.parse(raw) as UserModel;
+    } catch {
+      return null;
     }
   }
 
-  getUserBadges(userEmail: string) {
-    return this.http.post<any>(badgeURL + 'badge-info', {email: userEmail});
+  getUserBadges(userEmail: string): Observable<unknown> {
+    return this.http.post<unknown>(`${this.apiBase}/badge-info`, {
+      email: userEmail,
+    });
   }
 
-  updateBadgeInfo(reqObj: LooseObject) {
-    return this.http.post<any>(badgeURL + 'badge-confetti-status', reqObj);
+  updateBadgeInfo(reqObj: BadgeInfoRequest): Observable<unknown> {
+    return this.http.post<unknown>(
+      `${this.apiBase}/badge-confetti-status`,
+      reqObj,
+    );
   }
 }

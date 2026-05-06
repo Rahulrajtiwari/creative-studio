@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cs.backend.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+data:
+  PROJECT_ID: {{ include "cs.effective.projectId" . | quote }}
+  LOCATION: {{ include "cs.effective.location" . | quote }}
+  ENVIRONMENT: {{ .Values.global.environment | quote }}
+  LOG_LEVEL: {{ .Values.backend.config.LOG_LEVEL | quote }}
+  BEHIND_INGRESS: {{ .Values.backend.config.BEHIND_INGRESS | quote }}
+  TRUSTED_HOSTS: {{ include "cs.effective.trustedHosts" . | quote }}
+  FRONTEND_URL: {{ include "cs.effective.frontendUrl" . | quote }}
+
+  GENMEDIA_BUCKET: {{ .Values.backend.config.GENMEDIA_BUCKET | quote }}
+  VIDEO_BUCKET: {{ .Values.backend.config.VIDEO_BUCKET | quote }}
+  IMAGE_BUCKET: {{ .Values.backend.config.IMAGE_BUCKET | quote }}
+
+  OIDC_ISSUER: {{ .Values.backend.config.OIDC_ISSUER | quote }}
+  OIDC_AUDIENCES: {{ .Values.backend.config.OIDC_AUDIENCES | quote }}
+  OIDC_ALLOWED_EMAIL_DOMAINS: {{ .Values.backend.config.OIDC_ALLOWED_EMAIL_DOMAINS | quote }}
+  OIDC_ALLOWED_GROUPS_CLAIM: {{ .Values.backend.config.OIDC_ALLOWED_GROUPS_CLAIM | quote }}
+  OIDC_ALLOWED_GROUPS: {{ .Values.backend.config.OIDC_ALLOWED_GROUPS | quote }}
+  OIDC_AUTHORIZED_PARTY: {{ .Values.backend.config.OIDC_AUTHORIZED_PARTY | quote }}
+  OIDC_REQUIRE_EMAIL_VERIFIED: {{ .Values.backend.config.OIDC_REQUIRE_EMAIL_VERIFIED | quote }}
+  JWKS_CACHE_TTL_SEC: {{ .Values.backend.config.JWKS_CACHE_TTL_SEC | quote }}
+
+  USE_CLOUD_SQL_AUTH_PROXY: {{ .Values.backend.config.USE_CLOUD_SQL_AUTH_PROXY | quote }}
+  DB_HOST: {{ .Values.backend.config.DB_HOST | quote }}
+  DB_PORT: {{ .Values.backend.config.DB_PORT | quote }}
+  DB_NAME: {{ .Values.backend.config.DB_NAME | quote }}
+  DB_USER: {{ .Values.backend.config.DB_USER | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cs.frontend.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+data:
+  BACKEND_SERVICE_HOST: {{ include "cs.effective.backendHost" . | quote }}
+  BACKEND_SERVICE_PORT: {{ .Values.frontend.config.BACKEND_SERVICE_PORT | quote }}
+  OIDC_AUTHORITY: {{ .Values.frontend.config.OIDC_AUTHORITY | quote }}
+  OIDC_CLIENT_ID: {{ .Values.frontend.config.OIDC_CLIENT_ID | quote }}
+  OIDC_SCOPE: {{ .Values.frontend.config.OIDC_SCOPE | quote }}
+  OIDC_AUDIENCE: {{ .Values.frontend.config.OIDC_AUDIENCE | quote }}
+  OIDC_IDP_DISPLAY_NAME: {{ .Values.frontend.config.OIDC_IDP_DISPLAY_NAME | quote }}
+  APP_HOST: {{ include "cs.effective.appHost" . | quote }}

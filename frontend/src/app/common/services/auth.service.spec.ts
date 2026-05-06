@@ -1,5 +1,5 @@
 /**
- * Copyright 2025 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,89 @@
  * limitations under the License.
  */
 
-import {TestBed} from '@angular/core/testing';
 import {HttpClientTestingModule} from '@angular/common/http/testing';
-import {Router} from '@angular/router';
-import {Auth} from '@angular/fire/auth';
+import {TestBed} from '@angular/core/testing';
+import {RouterTestingModule} from '@angular/router/testing';
+import {OidcSecurityService} from 'angular-auth-oidc-client';
+import {of} from 'rxjs';
+
 import {AuthService} from './auth.service';
+import {RuntimeConfigService} from '../../runtime-config.service';
 import {UserService} from './user.service';
 
-describe('AuthService', () => {
-  let service: AuthService;
+describe('AuthService (OIDC)', () => {
+  let oidcSpy: jasmine.SpyObj<OidcSecurityService>;
+  let userServiceSpy: jasmine.SpyObj<UserService>;
+  let runtime: Partial<RuntimeConfigService>;
 
   beforeEach(() => {
+    oidcSpy = jasmine.createSpyObj<OidcSecurityService>('OidcSecurityService', [
+      'authorize',
+      'logoff',
+      'checkAuth',
+      'getAccessToken',
+      'forceRefreshSession',
+    ]);
+    oidcSpy.checkAuth.and.returnValue(
+      of({
+        isAuthenticated: true,
+        userData: {},
+        accessToken: 'access-token',
+        idToken: 'id-token',
+        configId: 'main',
+        errorMessage: '',
+      } as any),
+    );
+    oidcSpy.getAccessToken.and.returnValue(of('access-token'));
+    oidcSpy.logoff.and.returnValue(of(null));
+
+    userServiceSpy = jasmine.createSpyObj<UserService>('UserService', [
+      'getUserDetails',
+    ]);
+
+    runtime = {
+      config: {
+        backendURL: '/api',
+        oidc: {
+          authority: 'https://idp.example.com',
+          clientId: 'client',
+          scope: 'openid profile email',
+          audience: 'api',
+          idpDisplayName: 'Test',
+        },
+      },
+    };
+
     TestBed.configureTestingModule({
-      imports: [HttpClientTestingModule],
+      imports: [HttpClientTestingModule, RouterTestingModule],
       providers: [
         AuthService,
-        {provide: Router, useValue: {}},
-        {provide: UserService, useValue: {}},
-        {provide: Auth, useValue: {}},
+        {provide: OidcSecurityService, useValue: oidcSpy},
+        {provide: UserService, useValue: userServiceSpy},
+        {provide: RuntimeConfigService, useValue: runtime},
       ],
     });
-    service = TestBed.inject(AuthService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
+  it('login() delegates to OidcSecurityService.authorize()', () => {
+    const svc = TestBed.inject(AuthService);
+    svc.login();
+    expect(oidcSpy.authorize).toHaveBeenCalled();
+  });
+
+  it('logout() clears local user details and calls OIDC logoff()', () => {
+    localStorage.setItem('USER_DETAILS', '{"email":"x"}');
+    const svc = TestBed.inject(AuthService);
+    svc.logout();
+    expect(oidcSpy.logoff).toHaveBeenCalled();
+    expect(localStorage.getItem('USER_DETAILS')).toBeNull();
+  });
+
+  it('getValidAccessToken$ resolves to the OIDC access token', done => {
+    const svc = TestBed.inject(AuthService);
+    svc.getValidAccessToken$().subscribe(token => {
+      expect(token).toBe('access-token');
+      done();
+    });
   });
 });

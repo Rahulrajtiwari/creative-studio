@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-import {Component} from '@angular/core';
+import {Component, OnInit} from '@angular/core';
 import {Router, NavigationEnd, Event as NavigationEvent} from '@angular/router';
 import {trigger, transition, style, query, animate} from '@angular/animations';
+import {AuthService} from './common/services/auth.service';
 import {LoadingService} from './common/services/loading.service';
 
 @Component({
@@ -50,13 +51,14 @@ import {LoadingService} from './common/services/loading.service';
     ]),
   ],
 })
-export class AppComponent {
+export class AppComponent implements OnInit {
   title = 'creative-studio';
   showHeader = true;
 
   constructor(
     private router: Router,
     public loadingService: LoadingService,
+    private authService: AuthService,
   ) {
     this.router.events.subscribe((event: NavigationEvent) => {
       if (event instanceof NavigationEnd) {
@@ -73,6 +75,16 @@ export class AppComponent {
           this.showHeader = true;
         }
       }
+    });
+  }
+
+  ngOnInit(): void {
+    // Resolve any pending OIDC redirect (Authorization Code response or
+    // silent-renew callback) before any guarded route is evaluated.
+    this.authService.initialize().subscribe({
+      error: err => {
+        console.error('OIDC initialization failed:', err);
+      },
     });
   }
 }

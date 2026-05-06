@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,20 +12,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM node:20-alpine AS builder
+# --- Build stage --------------------------------------------------------------
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
-COPY . /app/
 
-RUN npm ci
-RUN npm run build-dev
+# Install only what package.json declares to keep the layer cached.
+COPY package*.json ./
+RUN npm ci --no-audit --no-fund
 
-FROM nginx:alpine
-COPY --from=builder /app/dist/creative-studio/browser /usr/share/nginx/html
-# It's best practice to replace the default config file.
-COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
+# Then copy the rest of the source.
+COPY . .
 
-# Give the nginx user ownership of the app files
-RUN chown -R nginx:nginx /usr/share/nginx/html
+# Production build: hashed assets, AOT, no source maps.
+ARG NG_CONFIGURATION=production
+RUN npm run build -- --configuration=${NG_CONFIGURATION}
+
+# --- Runtime stage ------------------------------------------------------------
+# nginx-unprivileged exposes the same image as nginx:1.27-alpine but configured
+# to run as UID 101 by default, which is what we want under the restricted
+# Pod Security profile.
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+
+# Copy compiled SPA + assets.
+COPY --from=builder --chown=nginx:nginx /app/dist/creative-studio/browser /usr/share/nginx/html
+
+# Templated nginx config (envsubst-rendered at container start).
+COPY --chown=nginx:nginx nginx.conf /etc/nginx/templates/default.conf.template
+
+# Entrypoint that runs envsubst then nginx.
+COPY --chown=nginx:nginx docker-entrypoint.sh /docker-entrypoint.sh
+
+USER root
+RUN apk add --no-cache gettext tini \
+    && chmod +x /docker-entrypoint.sh \
+    && rm -f /etc/nginx/conf.d/default.conf
+USER nginx
 
 EXPOSE 8080
+
+ENTRYPOINT ["/sbin/tini", "--", "/docker-entrypoint.sh"]

@@ -25,11 +25,11 @@ services:
       - postgres
 
     env_file:
-      - ./backend/.env
+      - ./backend/.local.env
 
-    # Override the Dockerfile's CMD to enable --reload.
-    # Using 1 worker is better for a dev/reload environment.
-    # Use uvicorn's native --reload for development
+    # Override the production CMD to enable --reload for the dev workflow.
+    # In production the backend runs as a single uvicorn process via tini —
+    # see backend/Dockerfile.
     command: >
       sh -c "
       uv sync --locked --no-dev &&

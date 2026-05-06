@@ -71,87 +71,144 @@ Creative Studio goes beyond simple demos, implementing advanced, real-world feat
 </p>
 
 
-## Deploy in 20min!!
+## Production Deployment (Private GKE)
 
-Just run this script which has a step by step approach for you to deploy the infrastructure and start the app, just follow the instructions
+Creative Studio is now packaged as a **fully-private**, enterprise-grade
+application that runs on Google Kubernetes Engine. The application is **not
+reachable from the public internet** — only users on the corporate network
+(VDI, VPN, Cloud Interconnect, or a sanctioned corporate proxy) can access
+the Internal HTTPS Load Balancer that fronts it.
+
+The bootstrap script and Firebase Hosting / Cloud Run flow are no longer
+supported. Use the Terraform stacks under `infra/environments/{dev,qat,prd}`
+plus the Helm chart at `deploy/helm/creative-studio` instead.
+
+### High-level architecture
 
 ```
-curl https://raw.githubusercontent.com/GoogleCloudPlatform/gcc-creative-studio/refs/heads/main/bootstrap.sh | bash
+Corporate User
+   │  (VPN / VDI / Interconnect)
+   ▼
+Internal HTTPS Load Balancer  ◄── corp-issued TLS cert in Secret Manager
+   │
+   ▼
+GKE Private Cluster (regional, private endpoint, Master Authorized Networks)
+   ├─ frontend Deployment   ──► Nginx (non-root, 8080) serving Angular
+   └─ backend  Deployment   ──► FastAPI (non-root, 8080)
+                            └─ cloud-sql-proxy sidecar (--auto-iam-authn)
+                                  │
+                                  ▼
+                          Private Cloud SQL (Postgres, PSA, IAM auth)
+                                  │
+                                  ▼
+                          Private Service Connect ──► googleapis.com
+                                                       (Vertex AI, GCS,
+                                                        Secret Manager, ...)
+
+Identity Provider (Ping / Okta / Entra ID) ── OIDC Auth Code + PKCE
 ```
 
-For better guidance, [we recorded a video](./screenshots/how_to_deploy_creative_studio.mp4) to showcase how to deploy Creative Studio in a completely new and fresh GCP Account.
+Detailed walkthroughs live in [`DEVELOPMENT.md`](./DEVELOPMENT.md).
 
-### Redeploying
+### Repository layout
 
-To redeploy the latest changes to Creative Studio, simply sync your forked repository with the `main` branch. You can do this by clicking the **"Sync with main"** button on GitHub or manually by running `git pull upstream main` in your local repository.
+| Path                                      | What's there                                                            |
+|-------------------------------------------|-------------------------------------------------------------------------|
+| `backend/`                                | FastAPI service, OIDC verifier, Cloud SQL Proxy-friendly DB layer       |
+| `frontend/`                               | Angular SPA (`angular-auth-oidc-client`) + non-root Nginx runtime image |
+| `infra/modules/network/`                  | VPC, subnets, PSA, PSC, NAT, private DNS, firewalls (BYO toggles)       |
+| `infra/modules/gke-private/`              | Regional private GKE cluster + node pools                               |
+| `infra/modules/cloudsql-private/`         | Private Cloud SQL PostgreSQL (PSA) with IAM auth                        |
+| `infra/modules/gcs-private/`              | Hardened GCS buckets (UBLA, public-access prevention, scoped CORS)      |
+| `infra/modules/artifact-registry/`        | Private Docker repo                                                     |
+| `infra/modules/internal-lb-cert/`         | Regional SSL cert sourced from Secret Manager + reserved internal IP    |
+| `infra/modules/workload-identity/`        | GSA ↔ KSA bindings                                                      |
+| `infra/modules/platform-gke/`             | Wrapper that wires all the above into a single platform stack           |
+| `infra/environments/{dev,qat,prd}/`       | Per-env Terraform roots with `*.tfvars.example` and remote state config |
+| `deploy/helm/creative-studio/`            | Production Helm chart (HPA, PDB, NetworkPolicy, BackendConfig, ...)    |
+| `deploy/kustomize/`                       | Kustomize overlays (renders the Helm chart with PSA labels)             |
+| `deploy/cloudbuild/`                      | Cloud Build pipelines for backend, frontend, deploy (private pool)      |
+| `deploy/argocd/`                          | Argo CD `AppProject` and `ApplicationSet` for GitOps                    |
 
-The Cloud Build triggers will automatically detect the new code changes and start the process to redeploy the application (taking approximately 5 minutes).
+### "Bring Your Own" (BYO) compatibility matrix
 
-![](./screenshots/github-sync-with-main.png)
+You may reuse existing infrastructure or have Terraform create new resources.
+Whether you reuse or create, **all CIDR/network inputs are mandatory** so
+operators avoid IP conflicts.
 
-*💡 Tip: If your fork is behind the upstream repository, you will see a **"Sync fork"** or **"Update branch"** button in this section that allows you to pull latest changes automatically with one click.*
+| Resource                       | Variable to reuse existing                          | Notes when creating new                                            |
+|--------------------------------|-----------------------------------------------------|--------------------------------------------------------------------|
+| VPC network                    | `network.existing_vpc_name`                         | Otherwise set `network.new_vpc_name`                               |
+| GKE primary subnet             | `network.existing_gke_subnet_name`                  | Always provide `network.gke_subnet_cidr`                           |
+| Pods/Services secondary ranges | `network.existing_pods_range_name` / `..._services` | Always provide `pods_secondary_cidr` / `services_secondary_cidr`   |
+| Proxy-only subnet (ILB)        | `network.existing_proxy_only_subnet_name`           | Always provide `network.proxy_only_subnet_cidr`                    |
+| GKE cluster                    | `gke.existing_cluster_name`                         | Always provide `gke.master_ipv4_cidr_block` and node-pool sizing   |
+| Cloud SQL instance             | `cloudsql.existing_instance_name`                   | Always provide `cloudsql.psa_range_*`                              |
+| GCS buckets                    | `gcs.existing_bucket_name_*`                        | Otherwise the chart creates buckets with UBLA + scoped CORS        |
 
-In case there are infrastructure changes (e.g., new cloud resources or configuration), you may need to redeploy Creative Studio by running Terraform manually. However, that is usually not the case, and if required, a note will be added to the version release documentation.
+### Authentication: OpenID Connect
 
-<video controls autoplay loop width="100%" style="max-width: 1200px;">
-  <source src="./screenshots/how_to_deploy_creative_studio.mp4" type="video/mp4">
-  Your browser does not support the video tag. You can <a href="./screenshots/how_to_deploy_creative_studio.mp4">download the video here</a>.
-</video>
+Creative Studio integrates with **any standard OIDC IdP** — Ping, Okta,
+Entra ID, Keycloak, etc. The frontend uses the
+[`angular-auth-oidc-client`](https://www.npmjs.com/package/angular-auth-oidc-client)
+library (Authorization Code + PKCE, silent renew via refresh tokens). The
+backend verifies bearer JWTs against the IdP's JWKS, checking `iss`, `aud`,
+`exp`, `nbf`, `email_verified`, allowed email domains, and group claims.
 
-## System Architecture
+To onboard a new IdP, register a confidential client with:
 
-![](./screenshots/creative-studio-architecture.png)
+- **Allowed callback** : `https://<corp-host>/`
+- **Allowed logout**   : `https://<corp-host>/login`
+- **Token endpoint authentication**: `none` (PKCE only) or `private_key_jwt`
+- **Required scopes** : `openid`, `profile`, `email`, plus `offline_access`
+  if your IdP requires it for refresh tokens
+- **Required claims** : `email`, `email_verified`, `groups` (or the claim
+  configured in `OIDC_ALLOWED_GROUPS_CLAIM`)
 
-The backend follows a **Modular, Feature-Driven Architecture**, heavily inspired by the principles of Hexagonal Architecture (Ports & Adapters).
+Then populate the `oidc.*` keys in `values-<env>.yaml` and the matching
+`OIDC_*` Terraform variables in `infra/environments/<env>/<env>.tfvars`.
 
-- **Structure:** Code is organized by feature domain (e.g., /images, /galleries, /users) rather than by technical layer (/controllers, /services).
-- **Rationale:**
-  - **Scalability:** This approach prevents individual directories from becoming unwieldy as the application grows.
-  - **Maintainability:** All code related to a single feature is co-located, making it easier to understand, modify, and test.
-  - **High Cohesion, Low Coupling:** Modules are self-contained and interact through well-defined interfaces (services and DTOs), making the system robust and flexible.
+### Pipeline overview
 
-### Technology Stack
+1. **Terraform** (`infra/environments/<env>`) provisions the platform.
+2. **Cloud Build** (`deploy/cloudbuild/cloudbuild-{backend,frontend}.yaml`)
+   builds & scans images on a private worker pool, pushes them to Artifact
+   Registry by digest, and writes a pinned `*-image-pinned.txt` artifact.
+3. A CI bot updates `values-<env>.yaml` with the new digest and commits.
+4. **Argo CD** (`deploy/argocd`) auto-syncs the Helm chart to the target
+   cluster (or, alternatively, run `cloudbuild-deploy.yaml` to drive a
+   `helm upgrade --install` directly).
+5. **Helm pre-install/upgrade hook** runs Alembic migrations against
+   Cloud SQL via the Cloud SQL Proxy sidecar before workloads start.
 
-| Category           | Technology / Service                                     |
-| :----------------- | :------------------------------------------------------- |
-| **Frontend**       | Angular, TypeScript, Angular Material, Tailwind CSS      |
-| **Backend**        | Python, FastAPI, Pydantic                                |
-| **Database**       | Google Cloud SQL (PostgreSQL)                            |
-| **Cloud Provider** | Google Cloud Platform (GCP)                              |
-| **Deployment**     | Cloud Run (for backend), Firebase Hosting (for frontend) |
-| **AI Models**      | Imagen, Veo, Gemini (via Vertex AI SDK)                  |
+### Required GCP APIs
 
-### Dependencies
-
-Regarding the dependencies of the APIs and Services we’ll use (the Google APIs `‘xxxx.googleapis.com’` will be enabled by the script automatically):
-
-- `Github Account` (You must have a Github Account to fork the repository)
-- `Google Cloud Account` (A GCP Project)
-
----
+The platform Terraform automatically enables every API listed below in the
+target project — operators do not need to enable them by hand.
 
 - `aiplatform.googleapis.com` (Vertex AI)
-- `artifactregistry.googleapis.com` (Artifact Registry)
-- `cloudbuild.googleapis.com` (Cloud Build)
-- `cloudfunctions.googleapis.com` (Cloud Functions)
-- `compute.googleapis.com` (Compute Engine)
-- `firebase.googleapis.com` (Firebase)
+- `artifactregistry.googleapis.com`
+- `cloudbuild.googleapis.com`
+- `compute.googleapis.com`
+- `container.googleapis.com` (GKE)
+- `containerfilesystem.googleapis.com` (image streaming)
+- `dns.googleapis.com` (private DNS zones)
+- `iam.googleapis.com`
+- `iamcredentials.googleapis.com`
+- `logging.googleapis.com` / `monitoring.googleapis.com`
+- `secretmanager.googleapis.com`
+- `servicenetworking.googleapis.com` (PSA)
 - `sqladmin.googleapis.com` (Cloud SQL)
-- `iamcredentials.googleapis.com` (IAM Service API)
-- `iap.googleapis.com` (Cloud Identity-Aware Proxy)
-- `identitytoolkit.googleapis.com` (Identity Platform)
-- `run.googleapis.com` (Cloud Run)
-- `secretmanager.googleapis.com` (Secret Manager)
-- `texttospeech.googleapis.com` (Text to Speech)
+- `storage.googleapis.com`
+- `texttospeech.googleapis.com`
 
-For the deployment you can use CloudShell which already has all of the necessary, but in case of deploying from a computer, the script will automatically check for the following command-line tools and attempt to install them if they are missing or outdated.
+### Operator tooling
 
 - `gcloud` (Google Cloud SDK)
-- `git`
-- `jq` (JSON processor)
-- `firebase-tools` (Firebase CLI)
-- `uv` (Python package installer)
-- `terraform` (version 1.13.0 or newer)
+- `terraform` >= 1.6
+- `helm` >= 3.13 (or `kustomize` >= 5 with `--enable-helm`)
+- `kubectl` matching the cluster's minor version
+- `git`, `jq`, `uv` (Python tooling for backend dev/test)
 
 ## 🛡️ Quality Standards & CI/CD
 

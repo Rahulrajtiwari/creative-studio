@@ -1,0 +1,104 @@
+global:
+  projectId: "creative-studio-prd"
+  region: "us-central1"
+  environment: "prd"
+  appHost: "creative-studio.corp.example.com"
+
+image:
+  registry: "us-central1-docker.pkg.dev/creative-studio-prd/platform"
+  pullPolicy: IfNotPresent
+
+backend:
+  replicaCount: 6
+  autoscaling:
+    minReplicas: 6
+    maxReplicas: 30
+    targetCPUUtilizationPercentage: 65
+  podDisruptionBudget:
+    minAvailable: 4
+  serviceAccount:
+    googleServiceAccount: "creative-studio-backend@creative-studio-prd.iam.gserviceaccount.com"
+  image:
+    tag: "REPLACE_AT_DEPLOY"
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+  config:
+    GENMEDIA_BUCKET: "creative-studio-prd-genmedia"
+    VIDEO_BUCKET: "creative-studio-prd-video"
+    IMAGE_BUCKET: "creative-studio-prd-image"
+    OIDC_ISSUER: "https://login.example.com/idp"
+    OIDC_AUDIENCES: "creative-studio"
+    OIDC_ALLOWED_EMAIL_DOMAINS: "example.com"
+    OIDC_ALLOWED_GROUPS: "creative-studio-users,creative-studio-admins"
+    DB_USER: "creative-studio-backend"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: backend
+          app.kubernetes.io/part-of: creative-studio
+
+cloudSqlProxy:
+  instanceConnectionName: "creative-studio-prd:us-central1:creative-studio-prd"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "1"
+      memory: "512Mi"
+
+frontend:
+  replicaCount: 4
+  autoscaling:
+    minReplicas: 4
+    maxReplicas: 16
+  podDisruptionBudget:
+    minAvailable: 2
+  image:
+    tag: "REPLACE_AT_DEPLOY"
+  config:
+    OIDC_AUTHORITY: "https://login.example.com/idp"
+    OIDC_CLIENT_ID: "creative-studio"
+    OIDC_AUDIENCE: "creative-studio"
+    OIDC_IDP_DISPLAY_NAME: "Corporate SSO"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: frontend
+          app.kubernetes.io/part-of: creative-studio
+
+ingress:
+  preSharedCertName: "creative-studio-prd-ilb-cert"
+  staticIpName: "creative-studio-prd-ilb-ip"
+  hosts:
+    - host: "creative-studio.corp.example.com"
+      paths:
+        - path: /api
+          pathType: Prefix
+          serviceName: backend
+        - path: /
+          pathType: Prefix
+          serviceName: frontend
+
+migrations:
+  image:
+    tag: "REPLACE_AT_DEPLOY"
+
+externalSecrets:
+  enabled: true
+
+networkPolicies:
+  egress:
+    cloudSqlPsaCidrs:
+      - "10.70.0.0/24"

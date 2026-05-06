@@ -1,0 +1,335 @@
+# =============================================================================
+# Default values for the creative-studio chart.
+#
+# Inputs marked REQUIRED must be supplied (per environment) by an overlay
+# values file (values-dev.yaml, values-qat.yaml, values-prd.yaml) and/or by
+# `terraform output -raw helm_values_yaml` from the platform-gke environment
+# root.
+# =============================================================================
+
+# Used to construct fully qualified names. Defaults to the release name.
+nameOverride: ""
+fullnameOverride: ""
+
+# -----------------------------------------------------------------------------
+# Global / cross-cutting settings.
+# -----------------------------------------------------------------------------
+global:
+  # GCP project that owns Cloud SQL, GCS, Secret Manager, Vertex AI.
+  projectId: ""                 # REQUIRED
+  region: "us-central1"
+  environment: "dev"            # dev | qat | prd
+  # Internal corporate FQDN that resolves to the ILB's static internal IP.
+  # Must match the SAN of the certificate provisioned via Terraform.
+  appHost: ""                   # REQUIRED, e.g. creative-studio.dev.corp.example.com
+
+# -----------------------------------------------------------------------------
+# Image registry. Defaults to a private Artifact Registry repo.
+# -----------------------------------------------------------------------------
+image:
+  registry: ""                  # REQUIRED, e.g. us-central1-docker.pkg.dev/<project>/<repo>
+  pullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# Backend (FastAPI).
+# -----------------------------------------------------------------------------
+backend:
+  enabled: true
+  image:
+    repository: creative-studio-backend
+    tag: ""                     # REQUIRED, set by CI to the immutable digest tag
+  replicaCount: 3
+  command: []
+  args: []
+  containerPort: 8080
+
+  # Workload Identity: GSA that the backend KSA impersonates.
+  serviceAccount:
+    create: true
+    name: ""                    # defaults to <release>-backend
+    googleServiceAccount: ""    # REQUIRED, e.g. creative-studio-backend@<proj>.iam.gserviceaccount.com
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 75
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+  # FastAPI app config — surfaced as environment variables.
+  config:
+    LOG_LEVEL: "INFO"
+    BEHIND_INGRESS: "true"
+    PROJECT_ID: ""              # REQUIRED, fall back to global.projectId via _helpers
+    LOCATION: ""                # REQUIRED, fall back to global.region
+    GENMEDIA_BUCKET: ""         # REQUIRED
+    VIDEO_BUCKET: ""            # REQUIRED
+    IMAGE_BUCKET: ""            # REQUIRED
+    OIDC_ISSUER: ""             # REQUIRED
+    OIDC_AUDIENCES: ""          # REQUIRED, comma-separated
+    OIDC_ALLOWED_EMAIL_DOMAINS: "" # comma-separated, optional
+    OIDC_ALLOWED_GROUPS_CLAIM: "groups"
+    OIDC_ALLOWED_GROUPS: ""     # comma-separated, optional
+    OIDC_AUTHORIZED_PARTY: ""   # optional
+    OIDC_REQUIRE_EMAIL_VERIFIED: "true"
+    JWKS_CACHE_TTL_SEC: "3600"
+    USE_CLOUD_SQL_AUTH_PROXY: "true"
+    DB_HOST: "127.0.0.1"
+    DB_PORT: "5432"
+    DB_NAME: "creative_studio"
+    DB_USER: ""                 # REQUIRED (the IAM-mapped GSA short name)
+    DB_PASS: ""                 # empty when USE_CLOUD_SQL_AUTH_PROXY=true + IAM auth
+    TRUSTED_HOSTS: ""           # comma-separated; defaults to global.appHost via _helpers
+
+  # Liveness/readiness probes.
+  probes:
+    liveness:
+      path: /healthz
+      initialDelaySeconds: 20
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      path: /readyz
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+    startup:
+      path: /healthz
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 30
+
+  service:
+    type: ClusterIP
+    port: 8080
+    portName: http
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+  # GKE BackendConfig (Ingress GCE controller).
+  backendConfig:
+    enabled: true
+    timeoutSec: 300
+    connectionDrainingTimeoutSec: 60
+    sessionAffinity:
+      affinityType: "NONE"
+    customRequestHeaders: []
+    securityPolicy:
+      name: ""                  # optional Cloud Armor policy
+
+# -----------------------------------------------------------------------------
+# Cloud SQL Auth Proxy sidecar.
+# -----------------------------------------------------------------------------
+cloudSqlProxy:
+  enabled: true
+  image:
+    # Pin to a digest in production; tag shown for readability.
+    repository: gcr.io/cloud-sql-connectors/cloud-sql-proxy
+    tag: "2.13.0"
+  # <project>:<region>:<instance> — set per environment.
+  instanceConnectionName: ""    # REQUIRED
+  port: 5432
+  privateIp: true               # only allow private IP path
+  iamAuthn: true                # use IAM database authentication
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+  extraArgs: []                 # e.g. ["--structured-logs", "--max-connections=200"]
+
+# -----------------------------------------------------------------------------
+# Frontend (Nginx + Angular).
+# -----------------------------------------------------------------------------
+frontend:
+  enabled: true
+  image:
+    repository: creative-studio-frontend
+    tag: ""                     # REQUIRED, set by CI to the immutable digest tag
+  replicaCount: 2
+  containerPort: 8080           # nginx-unprivileged listens on 8080 by default
+
+  serviceAccount:
+    create: true
+    name: ""                    # defaults to <release>-frontend
+    googleServiceAccount: ""    # optional (frontend usually doesn't need GCP perms)
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Runtime-config injected via envsubst by the entrypoint.
+  config:
+    BACKEND_SERVICE_HOST: ""    # defaults to <release>-backend.<ns>.svc.cluster.local
+    BACKEND_SERVICE_PORT: "8080"
+    OIDC_AUTHORITY: ""          # REQUIRED
+    OIDC_CLIENT_ID: ""          # REQUIRED
+    OIDC_SCOPE: "openid profile email"
+    OIDC_AUDIENCE: ""           # optional
+    OIDC_IDP_DISPLAY_NAME: "Corporate SSO"
+
+  probes:
+    liveness:
+      path: /healthz
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readiness:
+      path: /readyz
+      initialDelaySeconds: 3
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+
+  service:
+    type: ClusterIP
+    port: 8080
+    portName: http
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+  backendConfig:
+    enabled: true
+    timeoutSec: 60
+    connectionDrainingTimeoutSec: 30
+    securityPolicy:
+      name: ""                  # optional Cloud Armor policy
+
+# -----------------------------------------------------------------------------
+# Internal HTTPS Load Balancer Ingress.
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "gce-internal"
+  # Pre-created Google-managed regional ssl certificate (created by the
+  # internal-lb-cert Terraform module — pulls PEM/key from Secret Manager).
+  preSharedCertName: ""         # REQUIRED in production
+  staticIpName: ""              # optional reserved internal IP from Terraform
+  # FrontendConfig: redirect HTTP -> HTTPS.
+  frontendConfig:
+    enabled: true
+    redirectToHttps: true
+    sslPolicy: ""               # optional pre-created SSL policy name
+  hosts:
+    - host: ""                  # defaults to global.appHost
+      paths:
+        - path: /api
+          pathType: Prefix
+          serviceName: backend
+        - path: /
+          pathType: Prefix
+          serviceName: frontend
+
+# -----------------------------------------------------------------------------
+# Database migrations (Alembic) — runs as a Helm pre-install/pre-upgrade hook.
+# -----------------------------------------------------------------------------
+migrations:
+  enabled: true
+  image:
+    repository: creative-studio-backend
+    tag: ""                     # REQUIRED, same as backend image tag
+  command: ["alembic"]
+  args: ["upgrade", "head"]
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+  backoffLimit: 2
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 600
+
+# -----------------------------------------------------------------------------
+# NetworkPolicies (default deny + targeted allow).
+# -----------------------------------------------------------------------------
+networkPolicies:
+  enabled: true
+  # Allow egress to kube-dns / GoogleAPIs / PSA Cloud SQL CIDR / OIDC IdP.
+  egress:
+    dnsPort: 53
+    googleApisCidrs:
+      - "199.36.153.8/30"       # private.googleapis.com (private connect)
+      - "199.36.153.4/30"       # restricted.googleapis.com
+    cloudSqlPsaCidrs: []        # set per env, e.g. ["10.50.0.0/24"]
+    extraAllowCidrs: []         # corporate proxy / IdP egress targets
+
+# -----------------------------------------------------------------------------
+# External Secrets Operator integration (recommended over plain Secrets).
+# -----------------------------------------------------------------------------
+externalSecrets:
+  enabled: false
+  # Name of an existing ClusterSecretStore that authenticates to GCP Secret
+  # Manager via Workload Identity.
+  secretStoreRefName: "gcp-secret-manager"
+  refreshInterval: "1h"
+  # Map of <k8s-secret-key> -> <gcp-secret-manager-secret-name>.
+  data: {}
+  # If externalSecrets is disabled, you can provide the secret inline (NOT
+  # recommended for production; prefer ESO).
+  fallbackSecretData: {}        # keys/values written to a plain k8s Secret
+
+# -----------------------------------------------------------------------------
+# Pod Security context defaults — restricted profile.
+# -----------------------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  fsGroupChangePolicy: "OnRootMismatch"
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  capabilities:
+    drop: ["ALL"]

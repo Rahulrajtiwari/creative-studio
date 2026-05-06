@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: creative-studio
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Creative Studio (private GKE) — backend, frontend, infra glue
+  sourceRepos:
+    - "https://your-internal-git/creative-studio.git"
+  destinations:
+    - name: gke-dev
+      namespace: creative-studio
+      server: "https://kubernetes.default.svc"
+    - name: gke-qat
+      namespace: creative-studio
+      server: "*"
+    - name: gke-prd
+      namespace: creative-studio
+      server: "*"
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: networking.gke.io
+      kind: FrontendConfig
+    - group: cloud.google.com
+      kind: BackendConfig
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  orphanedResources:
+    warn: true
+  signatureKeys: []
+  roles:
+    - name: ci-deployer
+      description: CI bot can sync but not delete
+      policies:
+        - p, proj:creative-studio:ci-deployer, applications, get, creative-studio/*, allow
+        - p, proj:creative-studio:ci-deployer, applications, sync, creative-studio/*, allow
+        - p, proj:creative-studio:ci-deployer, applications, action/*, creative-studio/*, allow
+      groups:
+        - corp:creative-studio:ci

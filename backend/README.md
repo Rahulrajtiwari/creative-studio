@@ -14,36 +14,53 @@ The backend follows a **Modular, Feature-Driven Architecture**, heavily inspired
 
 ### Technology Stack
 
-| Category | Technology / Service |
-| :---- | :---- |
-| **Frontend** | Angular, TypeScript, Angular Material, Tailwind CSS |
-| **Backend** | Python, FastAPI, Pydantic |
-| **Database** | Google Cloud SQL (PostgreSQL) |
-| **Cloud Provider** | Google Cloud Platform (GCP) |
-| **Deployment** | Cloud Run (for backend), Firebase Hosting (for frontend) |
-| **AI Models** | Imagen, Veo, Gemini (via Vertex AI SDK) |
+| Category           | Technology / Service                                              |
+| :----------------- | :---------------------------------------------------------------- |
+| **Frontend**       | Angular, TypeScript, Angular Material, Tailwind CSS               |
+| **Backend**        | Python, FastAPI, Pydantic                                         |
+| **Database**       | Private Cloud SQL (PostgreSQL) via the Cloud SQL Auth Proxy + IAM |
+| **Cloud Provider** | Google Cloud Platform (GCP)                                       |
+| **Deployment**     | Private GKE (Internal HTTPS LB), Helm chart at `deploy/helm`      |
+| **AuthN**          | Generic OIDC (PyJWT + JWKS); IdP-agnostic (Ping/Okta/Entra/etc.)  |
+| **AI Models**      | Imagen, Veo, Gemini (via Vertex AI SDK)                           |
 
 ## 🚀 Backend Setup
 
-To run the backend locally using Docker Compose, you need to configure the environment variables.
+To run the backend locally using Docker Compose, the repository ships a
+working `backend/.local.env` file. The minimum overrides you need before the
+first run are listed below — see [`../DEVELOPMENT.md`](../DEVELOPMENT.md) for
+the full guide and OIDC IdP onboarding steps.
 
-### 1. Configure `.env` file
-
-Create a `.env` file in the `backend/` directory with the following content (replace values with your specific configuration):
+### 1. Configure `backend/.local.env`
 
 ```bash
-# Common env vars
-FRONTEND_URL="http://localhost:4200"
-ENVIRONMENT="local"
+# Application
+PROJECT_ID="my-dev-project"
 LOG_LEVEL="INFO"
+GENMEDIA_BUCKET="my-dev-genmedia"
+VIDEO_BUCKET="my-dev-video"
+IMAGE_BUCKET="my-dev-image"
+SIGNING_SA_EMAIL="cs-development-read@my-dev-project.iam.gserviceaccount.com"
 
-# Project ID: creative-studio-deploy
-GOOGLE_CLOUD_PROJECT="creative-studio-deploy"
-PROJECT_ID="creative-studio-deploy"
-GENMEDIA_BUCKET="creative-studio-deploy-cs-development-bucket"
-SIGNING_SA_EMAIL="cs-development-read@creative-studio-deploy.iam.gserviceaccount.com"
-GOOGLE_TOKEN_AUDIENCE="XXXX-XXXXXXXXXXX.apps.googleusercontent.com"
-IDENTITY_PLATFORM_ALLOWED_ORGS=""
+# OIDC (replaces Firebase + Identity Platform)
+OIDC_ISSUER="https://login.example.com/idp"
+OIDC_AUDIENCES="creative-studio-dev"
+OIDC_ALLOWED_EMAIL_DOMAINS="example.com"
+OIDC_ALLOWED_GROUPS_CLAIM="groups"
+OIDC_ALLOWED_GROUPS=""
+
+# Local Postgres container (provided by docker-compose.yml)
+DB_USER="studio_user"
+DB_PASS="studio_pass"
+DB_NAME="creative_studio"
+DB_HOST="postgres"
+DB_PORT="5432"
+USE_CLOUD_SQL_AUTH_PROXY=false
+
+# Front-end / ingress hardening
+BEHIND_INGRESS=false
+TRUSTED_HOSTS="localhost,127.0.0.1"
+FRONTEND_URL="http://localhost:4200"
 ```
 
 ### 2. Running the Application

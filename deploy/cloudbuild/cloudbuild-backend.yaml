@@ -1,0 +1,121 @@
+# =============================================================================
+# Cloud Build pipeline — backend image
+#
+# Runs on a Private Worker Pool inside the corporate VPC so the build job has
+# IP-allowlisted access to Artifact Registry, Cloud Source/GitHub Enterprise,
+# and any internal package mirrors. The image is pushed by digest to the
+# Artifact Registry repository created by the platform-gke Terraform module.
+#
+# Substitutions (override per trigger):
+#   _AR_REGION           Artifact Registry region (e.g. us-central1)
+#   _AR_REPO             Artifact Registry repo name (e.g. platform)
+#   _PROJECT_ID          GCP project that hosts the AR repo
+#   _IMAGE_NAME          Image short name (default: creative-studio-backend)
+#   _CACHE_FROM          Optional :cache tag used as a build cache source
+# =============================================================================
+
+steps:
+  # 1. Build the backend image with BuildKit, leveraging an inline cache.
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - -ceu
+      - |
+        IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}"
+        docker pull "$$IMG:${_CACHE_FROM}" || true
+        docker build \
+          --pull \
+          --target runtime \
+          --cache-from "$$IMG:${_CACHE_FROM}" \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
+          -t "$$IMG:$SHORT_SHA" \
+          -t "$$IMG:${_CACHE_FROM}" \
+          -f backend/Dockerfile \
+          backend
+
+  # 2. Run unit tests inside an ephemeral container of the freshly built image.
+  - id: test
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    waitFor: ["build"]
+    args:
+      - -ceu
+      - |
+        IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:$SHORT_SHA"
+        docker run --rm --entrypoint sh "$$IMG" -lc "pytest -q --maxfail=1"
+
+  # 3. Push image (and update the cache tag).
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    waitFor: ["test"]
+    args:
+      - -ceu
+      - |
+        IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}"
+        docker push "$$IMG:$SHORT_SHA"
+        docker push "$$IMG:${_CACHE_FROM}"
+
+  # 4. Vulnerability scan via Container Analysis (sync wait).
+  - id: scan
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    waitFor: ["push"]
+    args:
+      - -ceu
+      - |
+        IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:$SHORT_SHA"
+        gcloud artifacts docker images describe "$$IMG" \
+          --show-package-vulnerability \
+          --format="value(image_summary.digest)"
+
+  # 5. Resolve the digest and write it to a build artifact for downstream
+  #    consumers (Argo CD bumps, Helm release jobs, etc.).
+  - id: resolve-digest
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    waitFor: ["scan"]
+    args:
+      - -ceu
+      - |
+        IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}"
+        DIGEST=$(gcloud artifacts docker images describe "$$IMG:$SHORT_SHA" \
+          --format='value(image_summary.digest)')
+        printf '%s@%s\n' "$$IMG" "$$DIGEST" > /workspace/backend-image-pinned.txt
+        cat /workspace/backend-image-pinned.txt
+
+artifacts:
+  objects:
+    location: gs://${_BUILD_ARTIFACTS_BUCKET}/${_AR_REPO}/${_IMAGE_NAME}/${SHORT_SHA}/
+    paths:
+      - /workspace/backend-image-pinned.txt
+
+substitutions:
+  _AR_REGION: us-central1
+  _AR_REPO: platform
+  _PROJECT_ID: ${PROJECT_ID}
+  _IMAGE_NAME: creative-studio-backend
+  _CACHE_FROM: cache-main
+  _BUILD_ARTIFACTS_BUCKET: ""
+
+options:
+  # Pin to a Private Worker Pool created by your platform team. Public Cloud
+  # Build pools should NOT be used for private deployments.
+  workerPool: projects/${_PROJECT_ID}/locations/${_AR_REGION}/workerPools/${_PRIVATE_POOL_NAME}
+  logging: CLOUD_LOGGING_ONLY
+  substitution_option: ALLOW_LOOSE
+  defaultLogsBucketBehavior: REGIONAL_USER_OWNED_BUCKET
+  requestedVerifyOption: VERIFIED
+  machineType: E2_HIGHCPU_8
+  diskSizeGb: 100
+
+timeout: 2400s
+
+availableSecrets: {}
+
+tags:
+  - creative-studio
+  - backend

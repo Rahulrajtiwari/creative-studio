@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,8 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Database migrations runner and locking mechanism."""
+"""Run pending Alembic migrations under a Postgres advisory lock.
 
+The lock guarantees that even if N pods come up simultaneously only one
+process actually executes the migration. The asyncpg connection used to hold
+the lock is opened directly against the cloud-sql-proxy sidecar (or the local
+postgres in docker-compose).
+"""
+
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -21,50 +28,42 @@ import sys
 
 import asyncpg
 
-from src.database import get_connection
+from src.config.config_service import config_service
 
 logger = logging.getLogger(__name__)
 
-# A fixed ID for the advisory lock.
-# This ensures that all instances of the application will contend for the
-# same lock. The ID is arbitrary but must be consistent across all
-# instances.
 MIGRATION_LOCK_ID = 42
 
 
-async def run_pending_migrations():
-    """Acquires a Postgres advisory lock and runs Alembic migrations.
-    This ensures that only one instance runs migrations at a time.
-    """
+async def _open_lock_connection() -> asyncpg.Connection:
+    user = config_service.DB_USER
+    password = config_service.DB_PASS
+    host = config_service.DB_HOST
+    port = int(config_service.DB_PORT)
+    name = config_service.DB_NAME
+
+    kwargs = {
+        "user": user,
+        "host": host,
+        "port": port,
+        "database": name,
+    }
+    if not config_service.DB_USE_IAM_AUTH and password:
+        kwargs["password"] = password
+
+    return await asyncpg.connect(**kwargs)
+
+
+async def run_pending_migrations() -> None:
     logger.info("Attempting to run pending database migrations...")
 
-    conn = None
+    conn: asyncpg.Connection | None = None
     try:
-        # We need a raw connection to execute the lock command and keep it open
-        # while the subprocess runs.
-        # Using the existing get_connection helper which returns an asyncpg
-        # connection wrapped in SQLAlchemy's AsyncConnection if using
-        # create_async_engine, BUT get_connection returns the raw asyncpg
-        # connection from the Connector?
-        # Let's check src/database.py again.
-        # get_connection returns `conn` from `connector.connect_async`,
-        # which IS an asyncpg connection.
+        conn = await _open_lock_connection()
 
-        conn = await get_connection()
-
-        # Acquire advisory lock
-        # pg_advisory_lock waits until the lock is available.
-        # We use transaction-level lock or session-level?
-        # Since we are holding the connection, session-level is fine.
         logger.info("Acquiring advisory lock for migrations...")
         await conn.execute("SELECT pg_advisory_lock($1)", MIGRATION_LOCK_ID)
         logger.info("Advisory lock acquired.")
-
-        # Run Alembic migrations in a subprocess
-        # We use subprocess to avoid event loop conflicts with the running app
-        # and to ensure a clean environment for Alembic.
-        # Resolve alembic executable path relative to the current python
-        # interpreter
 
         alembic_cmd = os.path.join(os.path.dirname(sys.executable), "alembic")
 
@@ -80,21 +79,14 @@ async def run_pending_migrations():
         stdout, stderr = await process.communicate()
 
         if process.returncode == 0:
-            # Combine stdout and stderr to check for migration actions
-            # Alembic often logs to stderr by default
             full_output = (stdout.decode() if stdout else "") + (
                 stderr.decode() if stderr else ""
             )
-
             if "Running upgrade" in full_output:
                 logger.info("Migrations applied successfully.")
                 logger.info("Alembic Output:\n%s", full_output.strip())
             else:
-                logger.info(
-                    "Database is already up to date. No pending migrations."
-                )
-                # We can still log the output at debug level if needed, or just
-                # skip it to reduce noise
+                logger.info("Database is already up to date. No pending migrations.")
                 logger.debug("Alembic Output:\n%s", full_output.strip())
         else:
             logger.error("Migrations failed.")
@@ -102,24 +94,20 @@ async def run_pending_migrations():
                 logger.info("Alembic Output:\n%s", stdout.decode().strip())
             if stderr:
                 logger.error("Alembic Error:\n%s", stderr.decode().strip())
-            # We might want to raise an exception here to stop startup if
-            # migrations fail
             raise RuntimeError("Database migrations failed.")
 
-    except Exception as e:
-        logger.error("Error during migration process: %s", e)
+    except Exception as exc:
+        logger.error("Error during migration process: %s", exc)
         raise
     finally:
-        if conn:
+        if conn is not None:
             try:
-                # Release advisory lock
                 logger.info("Releasing advisory lock...")
                 await conn.execute(
                     "SELECT pg_advisory_unlock($1)", MIGRATION_LOCK_ID
                 )
-                logger.info("Advisory lock released.")
                 await conn.close()
-            except asyncpg.PostgresError as e:
+            except asyncpg.PostgresError as exc:
                 logger.error(
-                    "Error releasing lock or closing connection: %s", e
+                    "Error releasing lock or closing connection: %s", exc
                 )

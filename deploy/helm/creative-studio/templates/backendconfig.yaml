@@ -1,0 +1,65 @@
+{{- if and .Values.backend.enabled .Values.backend.backendConfig.enabled }}
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: {{ include "cs.backend.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  timeoutSec: {{ .Values.backend.backendConfig.timeoutSec }}
+  connectionDraining:
+    drainingTimeoutSec: {{ .Values.backend.backendConfig.connectionDrainingTimeoutSec }}
+  sessionAffinity:
+    affinityType: {{ .Values.backend.backendConfig.sessionAffinity.affinityType | quote }}
+  healthCheck:
+    type: HTTP
+    requestPath: {{ .Values.backend.probes.readiness.path | quote }}
+    port: {{ .Values.backend.containerPort }}
+    checkIntervalSec: 10
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 3
+  logging:
+    enable: true
+    sampleRate: 1.0
+  {{- with .Values.backend.backendConfig.securityPolicy.name }}
+  securityPolicy:
+    name: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.backend.backendConfig.customRequestHeaders }}
+  customRequestHeaders:
+    headers: {{ toYaml . | nindent 6 }}
+  {{- end }}
+{{- end }}
+---
+{{- if and .Values.frontend.enabled .Values.frontend.backendConfig.enabled }}
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: {{ include "cs.frontend.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  timeoutSec: {{ .Values.frontend.backendConfig.timeoutSec }}
+  connectionDraining:
+    drainingTimeoutSec: {{ .Values.frontend.backendConfig.connectionDrainingTimeoutSec }}
+  healthCheck:
+    type: HTTP
+    requestPath: {{ .Values.frontend.probes.readiness.path | quote }}
+    port: {{ .Values.frontend.containerPort }}
+    checkIntervalSec: 10
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 3
+  logging:
+    enable: true
+    sampleRate: 1.0
+  {{- with .Values.frontend.backendConfig.securityPolicy.name }}
+  securityPolicy:
+    name: {{ . | quote }}
+  {{- end }}
+{{- end }}

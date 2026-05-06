@@ -1,0 +1,10 @@
+{
+  "backendURL": "${BACKEND_URL_PREFIX}",
+  "oidc": {
+    "authority": "${OIDC_AUTHORITY}",
+    "clientId": "${OIDC_CLIENT_ID}",
+    "scope": "${OIDC_SCOPE}",
+    "audience": "${OIDC_AUDIENCE}",
+    "idpDisplayName": "${OIDC_IDP_DISPLAY_NAME}"
+  }
+}

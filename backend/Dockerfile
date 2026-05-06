@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,43 +12,56 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+# --- Build stage ----------------------------------------------------------
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
-# Install the project into `/app`
 WORKDIR /app
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-# Copy from the cache instead of linking since it's a mounted volume
-ENV UV_LINK_MODE=copy
-
-# Install the project's dependencies using the lockfile and settings
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-install-project --no-dev
 
-# Then, add the rest of the project source code and install it
-# Installing separately from its dependencies allows optimal layer caching
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
-# Place executables in the environment at the front of the path
-ENV PATH="/app/.venv/bin:$PATH"
+# --- Runtime stage --------------------------------------------------------
+FROM python:3.12-slim-bookworm AS runtime
 
-# Update package lists and install ffmpeg
-RUN apt-get update && apt-get install -y ffmpeg
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PATH="/app/.venv/bin:$PATH"
 
-# Reset the entrypoint, don't invoke `uv`
-ENTRYPOINT []
+# Install only the runtime libraries the app needs (ffmpeg for media ops, ca-certs for TLS).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates tini \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set default environment variables
-ENV ENVIRONMENT="development"
-ENV FRONTEND_URL="http://localhost:4200"
+# Non-root user.
+RUN groupadd --system --gid 10001 appgroup \
+    && useradd --system --uid 10001 --gid appgroup --shell /usr/sbin/nologin --create-home appuser
 
+WORKDIR /app
+
+COPY --from=builder --chown=appuser:appgroup /app /app
+
+USER appuser:appgroup
 EXPOSE 8080
 
-CMD ["gunicorn", "main:app", "--workers=4", "--worker-class=uvicorn.workers.UvicornWorker", "--timeout=36000", "--bind=0.0.0.0:8080"]
+# Single-process uvicorn; Kubernetes scales by replicas, not by gunicorn workers.
+# Tini ensures proper signal handling for graceful shutdown.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["uvicorn", "main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8080", \
+     "--proxy-headers", \
+     "--forwarded-allow-ips", "*", \
+     "--timeout-keep-alive", "75", \
+     "--access-log", \
+     "--log-level", "info"]

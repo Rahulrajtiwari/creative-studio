@@ -1,0 +1,97 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "cs.migrations.fullname" . }}-{{ .Release.Revision | default 1 }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.migrations.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "cs.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "cs.backend.serviceAccountName" . }}
+      automountServiceAccountToken: true
+      shareProcessNamespace: true
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: alembic
+          image: {{ include "cs.migrations.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: {{ toYaml .Values.migrations.command | nindent 12 }}
+          args: {{ toYaml .Values.migrations.args | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "cs.backend.fullname" . }}-config
+            {{- if or .Values.externalSecrets.enabled .Values.externalSecrets.fallbackSecretData }}
+            - secretRef:
+                name: {{ include "cs.backend.fullname" . }}-secrets
+                optional: true
+            {{- end }}
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            # Have the migration container shut down the proxy sidecar after
+            # alembic completes so the Job pod can terminate cleanly.
+            - name: SHUTDOWN_PROXY_AFTER
+              value: "true"
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+        {{- if .Values.cloudSqlProxy.enabled }}
+        - name: cloud-sql-proxy
+          image: "{{ .Values.cloudSqlProxy.image.repository }}:{{ .Values.cloudSqlProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # `--exit-zero-on-sigterm` allows the sidecar to exit 0 once the
+          # alembic container terminates, letting the Job complete.
+          args:
+            - "--structured-logs"
+            - "--quitquitquit"
+            - "--exit-zero-on-sigterm"
+            {{- if .Values.cloudSqlProxy.privateIp }}
+            - "--private-ip"
+            {{- end }}
+            {{- if .Values.cloudSqlProxy.iamAuthn }}
+            - "--auto-iam-authn"
+            {{- end }}
+            - "--port={{ .Values.cloudSqlProxy.port }}"
+            {{- range .Values.cloudSqlProxy.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+            - {{ required "cloudSqlProxy.instanceConnectionName is required" .Values.cloudSqlProxy.instanceConnectionName | quote }}
+          ports:
+            - name: db
+              containerPort: {{ .Values.cloudSqlProxy.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.cloudSqlProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+        {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+{{- end }}
