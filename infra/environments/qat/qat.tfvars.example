@@ -1,0 +1,149 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+project_id  = "REPLACE_PROJECT_ID"
+region      = "us-central1"
+name_prefix = "cs"
+labels = {
+  app         = "creative-studio"
+  environment = "qat"
+  managed_by  = "terraform"
+}
+
+network = {
+  existing_vpc_self_link                 = ""
+  existing_vpc_host_project_id           = ""
+  existing_nodes_subnet_self_link        = ""
+  existing_pods_secondary_range_name     = ""
+  existing_services_secondary_range_name = ""
+  existing_proxy_only_subnet_self_link   = ""
+  existing_psc_subnet_self_link          = ""
+  existing_psa_range_name                = ""
+  existing_router_name                   = ""
+  existing_dns_zone_name                 = ""
+
+  vpc_name               = "cs-vpc-qat"
+  nodes_subnet_name      = "cs-nodes-qat"
+  nodes_cidr             = "10.30.0.0/22"
+  pods_cidr              = "10.31.0.0/16"
+  services_cidr          = "10.32.0.0/20"
+  proxy_only_subnet_name = "cs-proxy-only-qat"
+  proxy_only_subnet_cidr = "10.33.0.0/23"
+  psc_subnet_name        = "cs-psc-qat"
+  psc_subnet_cidr        = "10.30.4.0/28"
+  psc_googleapis_ip      = "10.30.4.10"
+  psa_range_name         = "cs-psa-qat"
+  psa_range_cidr         = "10.34.0.0/16"
+  router_name            = "cs-router-qat"
+  dns_zone_name          = "cs-googleapis-qat"
+
+  enable_nat          = true
+  nat_static_ip_count = 1
+
+  master_authorized_cidrs = [
+    { cidr_block = "10.100.0.0/16", display_name = "corp-vpn" },
+    { cidr_block = "10.200.0.0/16", display_name = "vdi" },
+  ]
+  disallowed_cidrs = ["10.10.0.0/16", "192.168.0.0/16"]
+}
+
+gke = {
+  existing_cluster_name      = ""
+  existing_cluster_location  = ""
+  manage_node_pools_when_byo = false
+
+  cluster_name    = "cs-qat"
+  master_cidr     = "172.16.1.0/28"
+  release_channel = "REGULAR"
+
+  enable_dataplane_v2         = true
+  enable_binary_authorization = true
+  enable_confidential_nodes   = false
+  enable_image_streaming      = true
+  deletion_protection         = true
+  maintenance_start_time      = "03:00"
+
+  system_pool = {
+    machine_type    = "e2-standard-4"
+    min_nodes       = 2
+    max_nodes       = 3
+    disk_type       = "pd-balanced"
+    disk_size_gb    = 100
+    spot            = false
+    max_surge       = 1
+    max_unavailable = 0
+  }
+
+  app_pool = {
+    machine_type    = "n2-standard-4"
+    min_nodes       = 2
+    max_nodes       = 6
+    disk_type       = "pd-balanced"
+    disk_size_gb    = 200
+    spot            = false
+    max_surge       = 1
+    max_unavailable = 0
+  }
+}
+
+cloudsql = {
+  database_version         = "POSTGRES_15"
+  tier                     = "db-custom-2-7680"
+  availability_type        = "REGIONAL"
+  disk_size_gb             = 50
+  disk_autoresize_limit_gb = 200
+  deletion_protection      = true
+  db_name                  = "creative_studio"
+  db_user                  = "studio_user"
+  db_password_secret_id    = "creative-studio-db-password-qat"
+}
+
+gcs = {
+  bucket_name       = "REPLACE_PROJECT_ID-cs-qat"
+  cors_origins      = ["https://creative-studio.qat.corp.example.com"]
+  access_log_bucket = "REPLACE_PROJECT_ID-access-logs"
+}
+
+artifact_registry = {
+  repository_id = "creative-studio-qat"
+}
+
+ilb_cert = {
+  certificate_name      = "creative-studio-qat-cert"
+  cert_pem_secret_id    = "creative-studio-qat-tls-crt"
+  key_pem_secret_id     = "creative-studio-qat-tls-key"
+  ilb_static_ip_address = "10.30.0.50"
+}
+
+app = {
+  namespace          = "creative-studio"
+  fqdn               = "creative-studio.qat.corp.example.com"
+  backend_image_tag  = "latest"
+  frontend_image_tag = "latest"
+
+  oidc = {
+    issuer                 = "https://login.microsoftonline.com/REPLACE_TENANT_ID/v2.0"
+    audiences              = ["api://creative-studio-qat"]
+    frontend_client_id     = "REPLACE_FRONTEND_CLIENT_ID"
+    allowed_email_domains  = ["corp.example.com"]
+    allowed_groups_claim   = "roles"
+    allowed_groups         = ["creative-studio-users"]
+    authorized_party       = ""
+    jwks_cache_ttl_seconds = 3600
+    idp_display_name       = "Corporate SSO"
+  }
+
+  backend_signing_sa_email = "cs-be-qat@REPLACE_PROJECT_ID.iam.gserviceaccount.com"
+  workflows_executor_url   = ""
+}

@@ -11,10 +11,24 @@ local/
 # Terraform state and providers
 /.terraform/
 
-# Ignore all content inside environments directories...
+# Terraform: ignore all environments/* content by default (state, tfvars, etc.)
 **/environments/*
 
-# ...but re-include the dev-infra-example directory and its content.
-!**/environments/dev-infra-example/
+# But re-include the Terraform root configs (main.tf, variables.tf, etc.)
+!**/environments/dev/
+!**/environments/qat/
+!**/environments/prd/
+!**/environments/dev/*.tf
+!**/environments/qat/*.tf
+!**/environments/prd/*.tf
+!**/environments/*/*.example
+
+# Explicitly ignore actual tfvars (secrets) and generated files
+**/environments/**/*.tfvars
+!**/environments/**/*.tfvars.example
+**/environments/**/generated/
+**/environments/**/.terraform/
+**/environments/**/.terraform.lock.hcl
+**/environments/**/terraform.tfstate*
 
 genmedia-agent-demos
