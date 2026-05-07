@@ -17,11 +17,6 @@ variable "project_id" {
   description = "Project."
 }
 
-variable "region" {
-  type        = string
-  description = "Region of the regional SSL certificate (must match the L7 ILB)."
-}
-
 variable "environment" {
   type        = string
   description = "Logical environment name."
@@ -29,7 +24,7 @@ variable "environment" {
 
 variable "certificate_name" {
   type        = string
-  description = "Name of the regional SSL certificate."
+  description = "Name of the SSL certificate."
 }
 
 variable "cert_pem_secret_id" {
@@ -42,14 +37,8 @@ variable "key_pem_secret_id" {
   description = "Secret Manager secret ID containing the PEM-encoded private key."
 }
 
-variable "ilb_static_ip_address" {
+variable "lb_static_ip_address" {
   type        = string
-  description = "Optional internal IP (must be inside the nodes subnet primary range) reserved for the ILB. Leave empty to let the Ingress controller allocate one."
-  default     = ""
-}
-
-variable "nodes_subnet_self_link" {
-  type        = string
-  description = "Self-link of the subnet from which to allocate the static internal IP (only used when ilb_static_ip_address is set)."
+  description = "Optional static IP reserved for the Load Balancer. Leave empty to let the Ingress controller allocate one."
   default     = ""
 }

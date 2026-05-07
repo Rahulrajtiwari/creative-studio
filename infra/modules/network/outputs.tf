@@ -85,11 +85,11 @@ output "master_authorized_cidrs" {
 output "vpc_cidrs" {
   description = "Convenience map of every CIDR managed by this module (handy for downstream NetworkPolicies)."
   value = {
-    nodes      = var.nodes_cidr
-    pods       = var.pods_cidr
-    services   = var.services_cidr
-    proxy_only = var.proxy_only_subnet_cidr
-    psc        = var.psc_subnet_cidr
-    psa        = var.psa_range_cidr
+    nodes      = local.create_nodes_subnet ? var.nodes_cidr : data.google_compute_subnetwork.byo_nodes[0].ip_cidr_range
+    pods       = local.create_nodes_subnet ? var.pods_cidr : [for r in data.google_compute_subnetwork.byo_nodes[0].secondary_ip_range : r.ip_cidr_range if r.range_name == var.existing_pods_secondary_range_name][0]
+    services   = local.create_nodes_subnet ? var.services_cidr : [for r in data.google_compute_subnetwork.byo_nodes[0].secondary_ip_range : r.ip_cidr_range if r.range_name == var.existing_services_secondary_range_name][0]
+    proxy_only = local.create_proxy_subnet ? var.proxy_only_subnet_cidr : data.google_compute_subnetwork.byo_proxy_only[0].ip_cidr_range
+    psc        = local.create_psc_subnet ? var.psc_subnet_cidr : data.google_compute_subnetwork.byo_psc[0].ip_cidr_range
+    psa        = local.create_psa_range ? var.psa_range_cidr : "${data.google_compute_global_address.byo_psa[0].address}/${data.google_compute_global_address.byo_psa[0].prefix_length}"
   }
 }

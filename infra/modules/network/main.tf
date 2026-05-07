@@ -118,8 +118,10 @@ resource "google_compute_subnetwork" "nodes" {
 }
 
 data "google_compute_subnetwork" "byo_nodes" {
-  count     = local.create_nodes_subnet ? 0 : 1
-  self_link = var.existing_nodes_subnet_self_link
+  count   = local.create_nodes_subnet ? 0 : 1
+  name    = reverse(split("/", var.existing_nodes_subnet_self_link))[0]
+  region  = var.region
+  project = local.network_host_project
 }
 
 # -----------------------------------------------------------------------------
@@ -171,6 +173,7 @@ resource "google_compute_address" "psc_googleapis" {
   purpose      = "GCE_ENDPOINT"
 }
 
+/*
 resource "google_compute_forwarding_rule" "psc_googleapis" {
   name                    = "${var.name_prefix}-psc-googleapis-${var.environment}"
   project                 = var.project_id
@@ -181,6 +184,7 @@ resource "google_compute_forwarding_rule" "psc_googleapis" {
   target                  = "all-apis"
   allow_psc_global_access = true
 }
+*/
 
 # -----------------------------------------------------------------------------
 # Private Services Access (PSA) global address + VPC peering for Cloud SQL.
@@ -269,6 +273,7 @@ resource "google_compute_router_nat" "nat" {
 # Private DNS zone resolving *.googleapis.com / *.pkg.dev / *.gcr.io to the PSC
 # endpoint, so all Google API traffic from pods stays inside the VPC.
 # -----------------------------------------------------------------------------
+/*
 resource "google_dns_managed_zone" "googleapis" {
   count       = local.create_dns_zone ? 1 : 0
   name        = var.dns_zone_name
@@ -345,6 +350,7 @@ resource "google_dns_record_set" "pkg_dev_wildcard" {
   ttl          = 300
   rrdatas      = ["pkg.dev."]
 }
+*/
 
 # -----------------------------------------------------------------------------
 # Canonical local outputs (single source of truth, regardless of BYO vs create)

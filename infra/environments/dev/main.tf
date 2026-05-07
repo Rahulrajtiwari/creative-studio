@@ -59,7 +59,7 @@ module "platform" {
   cloudsql          = var.cloudsql
   gcs               = var.gcs
   artifact_registry = var.artifact_registry
-  ilb_cert          = var.ilb_cert
+  lb_config         = var.lb_config
   app               = var.app
 
   depends_on = [google_project_service.apis]

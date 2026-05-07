@@ -24,8 +24,20 @@ data "google_secret_manager_secret_version" "db_password" {
   secret  = var.db_password_secret_id
 }
 
+locals {
+  create_instance = trimspace(var.existing_instance_name) == ""
+  instance_name   = local.create_instance ? "${var.name_prefix}-pg-${var.environment}-${random_id.suffix.hex}" : var.existing_instance_name
+}
+
+data "google_sql_database_instance" "byo" {
+  count   = local.create_instance ? 0 : 1
+  name    = var.existing_instance_name
+  project = var.project_id
+}
+
 resource "google_sql_database_instance" "this" {
-  name                = "${var.name_prefix}-pg-${var.environment}-${random_id.suffix.hex}"
+  count               = local.create_instance ? 1 : 0
+  name                = local.instance_name
   project             = var.project_id
   region              = var.region
   database_version    = var.database_version
@@ -97,13 +109,13 @@ resource "google_sql_database_instance" "this" {
 resource "google_sql_database" "default" {
   project  = var.project_id
   name     = var.db_name
-  instance = google_sql_database_instance.this.name
+  instance = local.instance_name
 }
 
 resource "google_sql_user" "app" {
   project         = var.project_id
   name            = var.db_user
-  instance        = google_sql_database_instance.this.name
+  instance        = local.instance_name
   password        = data.google_secret_manager_secret_version.db_password.secret_data
   deletion_policy = "ABANDON"
 }
@@ -114,8 +126,8 @@ resource "google_sql_user" "app" {
 resource "google_sql_user" "iam" {
   for_each        = toset(var.iam_database_users)
   project         = var.project_id
-  name            = each.value
-  instance        = google_sql_database_instance.this.name
+  name            = replace(each.value, ".gserviceaccount.com", "")
+  instance        = local.instance_name
   type            = "CLOUD_IAM_SERVICE_ACCOUNT"
   deletion_policy = "ABANDON"
 }

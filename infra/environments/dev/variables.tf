@@ -73,7 +73,7 @@ variable "artifact_registry" {
   type = any
 }
 
-variable "ilb_cert" {
+variable "lb_config" {
   type = any
 }
 

@@ -14,17 +14,17 @@
 
 output "instance_name" {
   description = "Name of the Cloud SQL instance."
-  value       = google_sql_database_instance.this.name
+  value       = local.instance_name
 }
 
 output "connection_name" {
   description = "INSTANCE_CONNECTION_NAME used by the Cloud SQL Auth Proxy."
-  value       = google_sql_database_instance.this.connection_name
+  value       = local.create_instance ? google_sql_database_instance.this[0].connection_name : data.google_sql_database_instance.byo[0].connection_name
 }
 
 output "private_ip_address" {
   description = "Private IP allocated to the instance via PSA."
-  value       = google_sql_database_instance.this.private_ip_address
+  value       = local.create_instance ? google_sql_database_instance.this[0].private_ip_address : data.google_sql_database_instance.byo[0].private_ip_address
 }
 
 output "database_name" {

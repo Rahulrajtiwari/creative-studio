@@ -216,3 +216,9 @@ variable "node_service_account_email" {
   description = "Email of an existing service account to attach to nodes. Leave empty to let the module create a least-privilege node SA."
   default     = ""
 }
+
+variable "enable_secure_boot" {
+  type        = bool
+  description = "Enable Secure Boot for Shielded VMs on GKE nodes."
+  default     = true
+}

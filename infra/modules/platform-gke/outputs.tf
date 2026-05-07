@@ -65,12 +65,12 @@ output "artifact_registry_url" {
   value = module.artifact_registry.repository_url
 }
 
-output "ilb_certificate_name" {
-  value = module.ilb_cert.certificate_name
+output "lb_certificate_name" {
+  value = module.ssl_cert.certificate_name
 }
 
-output "ilb_static_ip_address" {
-  value = module.ilb_cert.ilb_static_ip_address
+output "lb_static_ip_address" {
+  value = module.ssl_cert.lb_static_ip_address
 }
 
 output "backend_gsa_email" {
@@ -156,8 +156,8 @@ output "helm_values" {
     }
 
     ingress = {
-      preSharedCertName = module.ilb_cert.certificate_name
-      staticIpName      = module.ilb_cert.ilb_static_ip_name
+      preSharedCertName = module.ssl_cert.certificate_name
+      staticIpName      = module.ssl_cert.lb_static_ip_name
       hosts = [
         {
           host = var.app.fqdn

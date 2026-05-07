@@ -203,6 +203,12 @@ variable "dns_zone_name" {
   description = "Private DNS managed zone resource name (Terraform name)."
 }
 
+variable "master_cidr" {
+  type        = string
+  description = "CIDR block for the GKE master (e.g. 172.16.0.0/28). Needed to allow egress from nodes to master in default-deny setups."
+  default     = ""
+}
+
 variable "dns_googleapis_zone_dns_name" {
   type        = string
   description = "DNS name for the private googleapis zone (must end with a dot, e.g. \"googleapis.com.\")."

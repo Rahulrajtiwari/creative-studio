@@ -87,6 +87,13 @@ resource "google_container_cluster" "this" {
   datapath_provider           = var.enable_dataplane_v2 ? "ADVANCED_DATAPATH" : "LEGACY_DATAPATH"
   networking_mode             = "VPC_NATIVE"
 
+  node_config {
+    shielded_instance_config {
+      enable_secure_boot          = var.enable_secure_boot
+      enable_integrity_monitoring = true
+    }
+  }
+
   release_channel {
     channel = var.release_channel
   }
@@ -107,7 +114,6 @@ resource "google_container_cluster" "this" {
   }
 
   master_authorized_networks_config {
-    gcp_public_advertised_prefixes_only = false
 
     dynamic "cidr_blocks" {
       for_each = var.master_authorized_cidrs
@@ -254,7 +260,7 @@ resource "google_container_node_pool" "system" {
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
 
     shielded_instance_config {
-      enable_secure_boot          = true
+      enable_secure_boot          = var.enable_secure_boot
       enable_integrity_monitoring = true
     }
 
@@ -323,7 +329,7 @@ resource "google_container_node_pool" "app" {
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
 
     shielded_instance_config {
-      enable_secure_boot          = true
+      enable_secure_boot          = var.enable_secure_boot
       enable_integrity_monitoring = true
     }
 

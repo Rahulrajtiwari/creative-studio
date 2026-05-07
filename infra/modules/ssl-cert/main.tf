@@ -26,11 +26,10 @@ data "google_secret_manager_secret_version" "key_pem" {
   secret  = var.key_pem_secret_id
 }
 
-resource "google_compute_region_ssl_certificate" "this" {
+resource "google_compute_ssl_certificate" "this" {
   name        = var.certificate_name
   project     = var.project_id
-  region      = var.region
-  description = "Internal HTTPS LB cert for ${var.environment} (corp PKI)."
+  description = "Global HTTPS LB cert for ${var.environment} (corp PKI)."
   certificate = data.google_secret_manager_secret_version.cert_pem.secret_data
   private_key = data.google_secret_manager_secret_version.key_pem.secret_data
 
@@ -39,13 +38,10 @@ resource "google_compute_region_ssl_certificate" "this" {
   }
 }
 
-resource "google_compute_address" "ilb" {
-  count        = trimspace(var.ilb_static_ip_address) != "" ? 1 : 0
+resource "google_compute_global_address" "lb" {
+  count        = trimspace(var.lb_static_ip_address) != "" ? 1 : 0
   name         = "${var.certificate_name}-ip"
   project      = var.project_id
-  region       = var.region
-  subnetwork   = var.nodes_subnet_self_link
-  address_type = "INTERNAL"
-  address      = var.ilb_static_ip_address
-  purpose      = "GCE_ENDPOINT"
+  address_type = "EXTERNAL"
+  address      = var.lb_static_ip_address
 }

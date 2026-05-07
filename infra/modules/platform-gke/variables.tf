@@ -169,6 +169,7 @@ variable "cloudsql" {
     db_name                  = optional(string, "creative_studio")
     db_user                  = optional(string, "studio_user")
     db_password_secret_id    = string
+    existing_instance_name   = optional(string, "")
     backups = optional(object({
       enabled                        = bool
       point_in_time_recovery_enabled = bool
@@ -217,14 +218,14 @@ variable "artifact_registry" {
 # -----------------------------------------------------------------------------
 # Internal LB cert (corporate PKI uploaded as regional SSL cert)
 # -----------------------------------------------------------------------------
-variable "ilb_cert" {
+variable "lb_config" {
   type = object({
-    certificate_name      = string
-    cert_pem_secret_id    = string
-    key_pem_secret_id     = string
-    ilb_static_ip_address = optional(string, "")
+    certificate_name     = string
+    cert_pem_secret_id   = string
+    key_pem_secret_id    = string
+    lb_static_ip_address = optional(string, "")
   })
-  description = "Internal LB cert inputs."
+  description = "Load Balancer config inputs."
 }
 
 # -----------------------------------------------------------------------------

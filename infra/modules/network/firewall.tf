@@ -54,11 +54,7 @@ resource "google_compute_firewall" "ingress_intra_vpc" {
   direction   = "INGRESS"
   priority    = 1100
 
-  source_ranges = compact([
-    var.nodes_cidr,
-    var.pods_cidr,
-    var.services_cidr,
-  ])
+  source_ranges = local.create_nodes_subnet ? compact([var.nodes_cidr, var.pods_cidr, var.services_cidr]) : concat([data.google_compute_subnetwork.byo_nodes[0].ip_cidr_range], [for r in data.google_compute_subnetwork.byo_nodes[0].secondary_ip_range : r.ip_cidr_range])
 
   allow { protocol = "tcp" }
   allow { protocol = "udp" }
@@ -126,6 +122,7 @@ resource "google_compute_firewall" "egress_intra_vpc" {
     var.services_cidr,
     var.proxy_only_subnet_cidr,
     var.psc_subnet_cidr,
+    var.master_cidr,
   ])
 
   allow { protocol = "tcp" }

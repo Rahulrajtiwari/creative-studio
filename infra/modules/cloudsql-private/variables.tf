@@ -33,6 +33,12 @@ variable "name_prefix" {
   description = "Resource name prefix."
 }
 
+variable "existing_instance_name" {
+  type        = string
+  default     = ""
+  description = "Name of an existing Cloud SQL instance to reuse. If empty, a new instance will be created."
+}
+
 variable "vpc_self_link" {
   type        = string
   description = "Self-link of the VPC the instance peers into via PSA."

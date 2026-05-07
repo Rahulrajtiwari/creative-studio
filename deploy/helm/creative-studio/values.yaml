@@ -242,9 +242,9 @@ frontend:
 # -----------------------------------------------------------------------------
 ingress:
   enabled: true
-  className: "gce-internal"
-  # Pre-created Google-managed regional ssl certificate (created by the
-  # internal-lb-cert Terraform module — pulls PEM/key from Secret Manager).
+  className: "gce"
+  # Pre-created Google-managed SSL certificate (created by the
+  # ssl-cert Terraform module — pulls PEM/key from Secret Manager).
   preSharedCertName: ""         # REQUIRED in production
   staticIpName: ""              # optional reserved internal IP from Terraform
   # FrontendConfig: redirect HTTP -> HTTPS.

@@ -13,16 +13,16 @@
 # limitations under the License.
 
 output "certificate_name" {
-  description = "Name of the regional SSL certificate (consumed by the Ingress annotation)."
-  value       = google_compute_region_ssl_certificate.this.name
+  description = "Name of the SSL certificate (consumed by the Ingress annotation)."
+  value       = google_compute_ssl_certificate.this.name
 }
 
-output "ilb_static_ip_name" {
-  description = "Name of the reserved static internal IP for the ILB (empty if not reserved)."
-  value       = length(google_compute_address.ilb) > 0 ? google_compute_address.ilb[0].name : ""
+output "lb_static_ip_name" {
+  description = "Name of the reserved static IP for the LB (empty if not reserved)."
+  value       = length(google_compute_global_address.lb) > 0 ? google_compute_global_address.lb[0].name : ""
 }
 
-output "ilb_static_ip_address" {
-  description = "Reserved static internal IP (empty if not reserved)."
-  value       = length(google_compute_address.ilb) > 0 ? google_compute_address.ilb[0].address : ""
+output "lb_static_ip_address" {
+  description = "Reserved static IP (empty if not reserved)."
+  value       = length(google_compute_global_address.lb) > 0 ? google_compute_global_address.lb[0].address : ""
 }

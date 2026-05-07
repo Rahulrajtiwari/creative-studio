@@ -49,6 +49,7 @@ module "network" {
   psa_range_cidr         = var.network.psa_range_cidr
   router_name            = var.network.router_name
   dns_zone_name          = var.network.dns_zone_name
+  master_cidr            = var.gke.master_cidr
 
   enable_nat              = var.network.enable_nat
   nat_name                = var.network.nat_name
@@ -120,6 +121,7 @@ module "cloudsql" {
   db_user                  = var.cloudsql.db_user
   db_password_secret_id    = var.cloudsql.db_password_secret_id
   backups                  = var.cloudsql.backups
+  existing_instance_name   = var.cloudsql.existing_instance_name
 
   iam_database_users = [
     google_service_account.placeholder_for_iam_user.email,
@@ -177,17 +179,15 @@ module "artifact_registry" {
 # -----------------------------------------------------------------------------
 # Internal LB SSL cert from corporate PKI
 # -----------------------------------------------------------------------------
-module "ilb_cert" {
-  source = "../internal-lb-cert"
+module "ssl_cert" {
+  source = "../ssl-cert"
 
   project_id             = var.project_id
-  region                 = var.region
   environment            = var.environment
-  certificate_name       = var.ilb_cert.certificate_name
-  cert_pem_secret_id     = var.ilb_cert.cert_pem_secret_id
-  key_pem_secret_id      = var.ilb_cert.key_pem_secret_id
-  ilb_static_ip_address  = var.ilb_cert.ilb_static_ip_address
-  nodes_subnet_self_link = module.network.nodes_subnet_self_link
+  certificate_name       = var.lb_config.certificate_name
+  cert_pem_secret_id     = var.lb_config.cert_pem_secret_id
+  key_pem_secret_id      = var.lb_config.key_pem_secret_id
+  lb_static_ip_address   = var.lb_config.lb_static_ip_address
 }
 
 # -----------------------------------------------------------------------------

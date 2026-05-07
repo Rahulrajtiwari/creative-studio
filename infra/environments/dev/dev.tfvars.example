@@ -123,6 +123,7 @@ cloudsql = {
   db_name                  = "creative_studio"
   db_user                  = "studio_user"
   db_password_secret_id    = "creative-studio-db-password-dev"
+  existing_instance_name   = ""
 }
 
 # -----------------------------------------------------------------------------
