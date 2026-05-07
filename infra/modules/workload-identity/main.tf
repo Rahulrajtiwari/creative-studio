@@ -17,17 +17,37 @@
 # in the GKE cluster.
 # -----------------------------------------------------------------------------
 
+locals {
+  create_sa_workloads = { for k, w in var.workloads : k => w if w.create_sa }
+  byo_sa_workloads    = { for k, w in var.workloads : k => w if !w.create_sa }
+
+  sa_emails = merge(
+    { for k, sa in google_service_account.this : k => sa.email },
+    { for k, sa in data.google_service_account.byo : k => sa.email },
+  )
+  sa_names = merge(
+    { for k, sa in google_service_account.this : k => sa.name },
+    { for k, sa in data.google_service_account.byo : k => sa.name },
+  )
+}
+
 resource "google_service_account" "this" {
-  for_each     = var.workloads
+  for_each     = local.create_sa_workloads
   project      = var.project_id
   account_id   = each.value.gsa_account_id
   display_name = "Workload SA for ${each.key} (${var.environment})"
   description  = "Bound via Workload Identity to KSA ${each.value.ksa_namespace}/${each.value.ksa_name}."
 }
 
+data "google_service_account" "byo" {
+  for_each   = local.byo_sa_workloads
+  project    = var.project_id
+  account_id = each.value.gsa_account_id
+}
+
 resource "google_service_account_iam_member" "wi_user" {
   for_each           = var.workloads
-  service_account_id = google_service_account.this[each.key].name
+  service_account_id = local.sa_names[each.key]
   role               = "roles/iam.workloadIdentityUser"
   member             = "serviceAccount:${var.project_id}.svc.id.goog[${each.value.ksa_namespace}/${each.value.ksa_name}]"
 }
@@ -50,7 +70,7 @@ resource "google_project_iam_member" "workload" {
   }
   project = var.project_id
   role    = each.value.role
-  member  = "serviceAccount:${google_service_account.this[each.value.workload].email}"
+  member  = "serviceAccount:${local.sa_emails[each.value.workload]}"
 }
 
 # Service-account-impersonation grants (e.g. signing for v4 GCS URLs).
@@ -72,5 +92,5 @@ resource "google_service_account_iam_member" "impersonation" {
   }
   service_account_id = "projects/${var.project_id}/serviceAccounts/${each.value.target_sa}"
   role               = each.value.target_role
-  member             = "serviceAccount:${google_service_account.this[each.value.workload].email}"
+  member             = "serviceAccount:${local.sa_emails[each.value.workload]}"
 }

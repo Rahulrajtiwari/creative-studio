@@ -14,7 +14,5 @@
 
 output "service_account_emails" {
   description = "Map of workload name -> Google service account email. Use these to set the iam.gke.io/gcp-service-account annotation on the KSAs."
-  value = {
-    for k, sa in google_service_account.this : k => sa.email
-  }
+  value       = local.sa_emails
 }

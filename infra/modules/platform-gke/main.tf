@@ -205,6 +205,7 @@ module "workload_identity" {
   workloads = {
     backend = {
       gsa_account_id = google_service_account.placeholder_for_iam_user.account_id
+      create_sa      = false
       ksa_namespace  = var.app.namespace
       ksa_name       = "cs-backend-ksa"
       project_roles = [
@@ -231,13 +232,6 @@ module "workload_identity" {
   }
 }
 
-# Override: bind the backend KSA to the *placeholder* GSA we already created
-# so it can be used as a Cloud SQL IAM user. We keep the placeholder GSA as
-# the authoritative backend SA; the WI module only manages the frontend SA
-# afresh. To avoid duplicate management, declare the WI binding directly
-# here for the placeholder.
-resource "google_service_account_iam_member" "backend_wi_binding" {
-  service_account_id = google_service_account.placeholder_for_iam_user.name
-  role               = "roles/iam.workloadIdentityUser"
-  member             = "serviceAccount:${var.project_id}.svc.id.goog[${var.app.namespace}/cs-backend-ksa]"
-}
+# The backend WI binding is now handled by the workload_identity module
+# (with create_sa=false so it reads the placeholder SA via data source
+# instead of creating a duplicate).

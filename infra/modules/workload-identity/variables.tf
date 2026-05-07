@@ -28,6 +28,7 @@ variable "workloads" {
     ksa_namespace  = string
     ksa_name       = string
     project_roles  = list(string)
+    create_sa      = optional(bool, true)
     impersonation_targets = list(object({
       target_service_account = string
       role                   = string
