@@ -111,6 +111,7 @@ variable "gke" {
     deletion_protection         = optional(bool, true)
     maintenance_start_time      = optional(string, "03:00")
     node_service_account_email  = optional(string, "")
+    enable_secure_boot          = optional(bool, true)
 
     system_pool = optional(object({
       machine_type    = string
@@ -170,6 +171,7 @@ variable "cloudsql" {
     db_user                  = optional(string, "studio_user")
     db_password_secret_id    = string
     existing_instance_name   = optional(string, "")
+    manage_db_and_users      = optional(bool, true)
     backups = optional(object({
       enabled                        = bool
       point_in_time_recovery_enabled = bool

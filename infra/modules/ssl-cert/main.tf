@@ -14,8 +14,8 @@
 
 # Reads the corporate-PKI cert + private key from Secret Manager (so the
 # operator can rotate by overwriting the secret) and uploads them as a
-# regional google_compute_region_ssl_certificate consumed by the Internal
-# HTTPS Load Balancer that the GKE `gce-internal` Ingress provisions.
+# global google_compute_ssl_certificate consumed by the external HTTPS
+# Load Balancer that the GKE `gce` Ingress provisions.
 data "google_secret_manager_secret_version" "cert_pem" {
   project = var.project_id
   secret  = var.cert_pem_secret_id

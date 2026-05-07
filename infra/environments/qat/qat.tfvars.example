@@ -107,6 +107,8 @@ cloudsql = {
   db_name                  = "creative_studio"
   db_user                  = "studio_user"
   db_password_secret_id    = "creative-studio-db-password-qat"
+  existing_instance_name   = ""
+  manage_db_and_users      = true
 }
 
 gcs = {
@@ -119,11 +121,11 @@ artifact_registry = {
   repository_id = "creative-studio-qat"
 }
 
-ilb_cert = {
-  certificate_name      = "creative-studio-qat-cert"
-  cert_pem_secret_id    = "creative-studio-qat-tls-crt"
-  key_pem_secret_id     = "creative-studio-qat-tls-key"
-  ilb_static_ip_address = "10.30.0.50"
+lb_config = {
+  certificate_name     = "creative-studio-qat-cert"
+  cert_pem_secret_id   = "creative-studio-qat-tls-crt"
+  key_pem_secret_id    = "creative-studio-qat-tls-key"
+  lb_static_ip_address = ""
 }
 
 app = {

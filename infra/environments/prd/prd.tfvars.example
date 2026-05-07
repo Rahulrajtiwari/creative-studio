@@ -114,6 +114,8 @@ cloudsql = {
   db_name                  = "creative_studio"
   db_user                  = "studio_user"
   db_password_secret_id    = "creative-studio-db-password-prd"
+  existing_instance_name   = ""
+  manage_db_and_users      = true
 }
 
 gcs = {
@@ -126,11 +128,11 @@ artifact_registry = {
   repository_id = "creative-studio-prd"
 }
 
-ilb_cert = {
-  certificate_name      = "creative-studio-prd-cert"
-  cert_pem_secret_id    = "creative-studio-prd-tls-crt"
-  key_pem_secret_id     = "creative-studio-prd-tls-key"
-  ilb_static_ip_address = "10.40.0.50"
+lb_config = {
+  certificate_name     = "creative-studio-prd-cert"
+  cert_pem_secret_id   = "creative-studio-prd-tls-crt"
+  key_pem_secret_id    = "creative-studio-prd-tls-key"
+  lb_static_ip_address = ""
 }
 
 app = {

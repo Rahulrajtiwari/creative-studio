@@ -92,6 +92,8 @@ module "gke" {
   maintenance_start_time      = var.gke.maintenance_start_time
   node_service_account_email  = var.gke.node_service_account_email
 
+  enable_secure_boot = var.gke.enable_secure_boot
+
   system_pool = var.gke.system_pool
   app_pool    = var.gke.app_pool
 }
@@ -122,6 +124,7 @@ module "cloudsql" {
   db_password_secret_id    = var.cloudsql.db_password_secret_id
   backups                  = var.cloudsql.backups
   existing_instance_name   = var.cloudsql.existing_instance_name
+  manage_db_and_users      = var.cloudsql.manage_db_and_users
 
   iam_database_users = [
     google_service_account.placeholder_for_iam_user.email,

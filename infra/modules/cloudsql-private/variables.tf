@@ -39,6 +39,12 @@ variable "existing_instance_name" {
   description = "Name of an existing Cloud SQL instance to reuse. If empty, a new instance will be created."
 }
 
+variable "manage_db_and_users" {
+  type        = bool
+  default     = true
+  description = "Whether Terraform should create the database and users on the instance. Set to false when the customer manages these out-of-band (e.g. BYO instance with pre-existing database)."
+}
+
 variable "vpc_self_link" {
   type        = string
   description = "Self-link of the VPC the instance peers into via PSA."

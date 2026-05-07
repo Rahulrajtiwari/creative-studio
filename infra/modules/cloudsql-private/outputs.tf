@@ -29,10 +29,10 @@ output "private_ip_address" {
 
 output "database_name" {
   description = "Name of the application database."
-  value       = google_sql_database.default.name
+  value       = var.manage_db_and_users ? google_sql_database.default[0].name : var.db_name
 }
 
 output "database_user" {
   description = "Password-auth application user."
-  value       = google_sql_user.app.name
+  value       = var.manage_db_and_users ? google_sql_user.app[0].name : var.db_user
 }

@@ -238,7 +238,7 @@ frontend:
       name: ""                  # optional Cloud Armor policy
 
 # -----------------------------------------------------------------------------
-# Internal HTTPS Load Balancer Ingress.
+# External HTTPS Load Balancer (GLB) Ingress.
 # -----------------------------------------------------------------------------
 ingress:
   enabled: true

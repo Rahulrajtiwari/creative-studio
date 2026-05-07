@@ -124,6 +124,7 @@ cloudsql = {
   db_user                  = "studio_user"
   db_password_secret_id    = "creative-studio-db-password-dev"
   existing_instance_name   = ""
+  manage_db_and_users      = true
 }
 
 # -----------------------------------------------------------------------------
@@ -147,13 +148,13 @@ artifact_registry = {
 }
 
 # -----------------------------------------------------------------------------
-# Internal LB cert (corp PKI uploaded to Secret Manager)
+# Load Balancer config (corp PKI uploaded to Secret Manager)
 # -----------------------------------------------------------------------------
-ilb_cert = {
-  certificate_name      = "creative-studio-dev-cert"
-  cert_pem_secret_id    = "creative-studio-dev-tls-crt"
-  key_pem_secret_id     = "creative-studio-dev-tls-key"
-  ilb_static_ip_address = "10.20.0.50"
+lb_config = {
+  certificate_name     = "creative-studio-dev-cert"
+  cert_pem_secret_id   = "creative-studio-dev-tls-crt"
+  key_pem_secret_id    = "creative-studio-dev-tls-key"
+  lb_static_ip_address = ""
 }
 
 # -----------------------------------------------------------------------------

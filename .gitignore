@@ -4,6 +4,8 @@ venv
 local/
 .env
 .DS_Store
+*.key
+*.crt
 
 .aider*
 .vscode
@@ -24,6 +26,7 @@ local/
 !**/environments/*/*.example
 
 # Explicitly ignore actual tfvars (secrets) and generated files
+**/environments/**/tfplan
 **/environments/**/*.tfvars
 !**/environments/**/*.tfvars.example
 **/environments/**/generated/

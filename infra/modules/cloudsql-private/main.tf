@@ -16,10 +16,8 @@ resource "random_id" "suffix" {
   byte_length = 4
 }
 
-# Read the password value at apply time so we can create the SQL user without
-# echoing it to state in plain text (it ends up in state, but at least the
-# operator doesn't have to pass it as a TF variable).
 data "google_secret_manager_secret_version" "db_password" {
+  count   = var.manage_db_and_users ? 1 : 0
   project = var.project_id
   secret  = var.db_password_secret_id
 }
@@ -107,16 +105,18 @@ resource "google_sql_database_instance" "this" {
 }
 
 resource "google_sql_database" "default" {
+  count    = var.manage_db_and_users ? 1 : 0
   project  = var.project_id
   name     = var.db_name
   instance = local.instance_name
 }
 
 resource "google_sql_user" "app" {
+  count           = var.manage_db_and_users ? 1 : 0
   project         = var.project_id
   name            = var.db_user
   instance        = local.instance_name
-  password        = data.google_secret_manager_secret_version.db_password.secret_data
+  password        = data.google_secret_manager_secret_version.db_password[0].secret_data
   deletion_policy = "ABANDON"
 }
 
@@ -124,7 +124,7 @@ resource "google_sql_user" "app" {
 # Proxy sidecar will request short-lived OAuth tokens via Workload Identity,
 # so we can drop password auth entirely for the app over time.
 resource "google_sql_user" "iam" {
-  for_each        = toset(var.iam_database_users)
+  for_each        = var.manage_db_and_users ? toset(var.iam_database_users) : toset([])
   project         = var.project_id
   name            = replace(each.value, ".gserviceaccount.com", "")
   instance        = local.instance_name

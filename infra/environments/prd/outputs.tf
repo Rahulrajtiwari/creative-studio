@@ -44,12 +44,12 @@ output "artifact_registry_url" {
   value = module.platform.artifact_registry_url
 }
 
-output "ilb_certificate_name" {
-  value = module.platform.ilb_certificate_name
+output "lb_certificate_name" {
+  value = module.platform.lb_certificate_name
 }
 
-output "ilb_static_ip_address" {
-  value = module.platform.ilb_static_ip_address
+output "lb_static_ip_address" {
+  value = module.platform.lb_static_ip_address
 }
 
 output "backend_gsa_email" {
