@@ -173,16 +173,18 @@ resource "google_compute_address" "psc_googleapis" {
   purpose      = "GCE_ENDPOINT"
 }
 
-resource "google_compute_forwarding_rule" "psc_googleapis" {
-  name                    = "${var.name_prefix}-psc-googleapis-${var.environment}"
-  project                 = var.project_id
-  region                  = var.region
-  network                 = local.vpc_self_link
-  ip_address              = google_compute_address.psc_googleapis.id
-  load_balancing_scheme   = ""
-  target                  = "all-apis"
-  allow_psc_global_access = true
-}
+# PSC forwarding rule is commented out because Cloud NAT provides egress to
+# Google APIs. Re-enable if you want fully private API access without NAT.
+# resource "google_compute_forwarding_rule" "psc_googleapis" {
+#   name                    = "${var.name_prefix}-psc-googleapis-${var.environment}"
+#   project                 = var.project_id
+#   region                  = var.region
+#   network                 = local.vpc_self_link
+#   ip_address              = google_compute_address.psc_googleapis.id
+#   load_balancing_scheme   = ""
+#   target                  = "all-apis"
+#   allow_psc_global_access = true
+# }
 
 # -----------------------------------------------------------------------------
 # Private Services Access (PSA) global address + VPC peering for Cloud SQL.
@@ -268,85 +270,86 @@ resource "google_compute_router_nat" "nat" {
 }
 
 # -----------------------------------------------------------------------------
-# Private DNS zone resolving *.googleapis.com / *.pkg.dev / *.gcr.io to the PSC
-# endpoint, so all Google API traffic from pods stays inside the VPC.
+# Private DNS zones for *.googleapis.com / *.pkg.dev / *.gcr.io are commented
+# out because Cloud NAT provides egress to Google APIs. Re-enable these along
+# with the PSC forwarding rule above if you want fully private API access
+# without NAT.
 # -----------------------------------------------------------------------------
-resource "google_dns_managed_zone" "googleapis" {
-  count       = local.create_dns_zone ? 1 : 0
-  name        = var.dns_zone_name
-  project     = var.project_id
-  dns_name    = var.dns_googleapis_zone_dns_name
-  description = "Private resolution of googleapis.com to the PSC endpoint (no public egress)."
-  visibility  = "private"
-
-  private_visibility_config {
-    networks {
-      network_url = local.vpc_self_link
-    }
-  }
-}
-
-data "google_dns_managed_zone" "byo_googleapis" {
-  count   = local.create_dns_zone ? 0 : 1
-  name    = var.existing_dns_zone_name
-  project = local.network_host_project
-}
-
-resource "google_dns_record_set" "googleapis_a" {
-  count        = local.create_dns_zone ? 1 : 0
-  project      = var.project_id
-  managed_zone = google_dns_managed_zone.googleapis[0].name
-  name         = "googleapis.com."
-  type         = "A"
-  ttl          = 300
-  rrdatas      = [var.psc_googleapis_ip]
-}
-
-resource "google_dns_record_set" "googleapis_wildcard_cname" {
-  count        = local.create_dns_zone ? 1 : 0
-  project      = var.project_id
-  managed_zone = google_dns_managed_zone.googleapis[0].name
-  name         = "*.googleapis.com."
-  type         = "CNAME"
-  ttl          = 300
-  rrdatas      = ["googleapis.com."]
-}
-
-# Artifact Registry / GCR private endpoints share the same PSC backend.
-resource "google_dns_managed_zone" "pkg_dev" {
-  count       = local.create_dns_zone ? 1 : 0
-  name        = "${var.name_prefix}-pkg-dev-${var.environment}"
-  project     = var.project_id
-  dns_name    = "pkg.dev."
-  description = "Private resolution of *.pkg.dev to PSC."
-  visibility  = "private"
-
-  private_visibility_config {
-    networks {
-      network_url = local.vpc_self_link
-    }
-  }
-}
-
-resource "google_dns_record_set" "pkg_dev_a" {
-  count        = local.create_dns_zone ? 1 : 0
-  project      = var.project_id
-  managed_zone = google_dns_managed_zone.pkg_dev[0].name
-  name         = "pkg.dev."
-  type         = "A"
-  ttl          = 300
-  rrdatas      = [var.psc_googleapis_ip]
-}
-
-resource "google_dns_record_set" "pkg_dev_wildcard" {
-  count        = local.create_dns_zone ? 1 : 0
-  project      = var.project_id
-  managed_zone = google_dns_managed_zone.pkg_dev[0].name
-  name         = "*.pkg.dev."
-  type         = "CNAME"
-  ttl          = 300
-  rrdatas      = ["pkg.dev."]
-}
+# resource "google_dns_managed_zone" "googleapis" {
+#   count       = local.create_dns_zone ? 1 : 0
+#   name        = var.dns_zone_name
+#   project     = var.project_id
+#   dns_name    = var.dns_googleapis_zone_dns_name
+#   description = "Private resolution of googleapis.com to the PSC endpoint (no public egress)."
+#   visibility  = "private"
+#
+#   private_visibility_config {
+#     networks {
+#       network_url = local.vpc_self_link
+#     }
+#   }
+# }
+#
+# data "google_dns_managed_zone" "byo_googleapis" {
+#   count   = local.create_dns_zone ? 0 : 1
+#   name    = var.existing_dns_zone_name
+#   project = local.network_host_project
+# }
+#
+# resource "google_dns_record_set" "googleapis_a" {
+#   count        = local.create_dns_zone ? 1 : 0
+#   project      = var.project_id
+#   managed_zone = google_dns_managed_zone.googleapis[0].name
+#   name         = "googleapis.com."
+#   type         = "A"
+#   ttl          = 300
+#   rrdatas      = [var.psc_googleapis_ip]
+# }
+#
+# resource "google_dns_record_set" "googleapis_wildcard_cname" {
+#   count        = local.create_dns_zone ? 1 : 0
+#   project      = var.project_id
+#   managed_zone = google_dns_managed_zone.googleapis[0].name
+#   name         = "*.googleapis.com."
+#   type         = "CNAME"
+#   ttl          = 300
+#   rrdatas      = ["googleapis.com."]
+# }
+#
+# resource "google_dns_managed_zone" "pkg_dev" {
+#   count       = local.create_dns_zone ? 1 : 0
+#   name        = "${var.name_prefix}-pkg-dev-${var.environment}"
+#   project     = var.project_id
+#   dns_name    = "pkg.dev."
+#   description = "Private resolution of *.pkg.dev to PSC."
+#   visibility  = "private"
+#
+#   private_visibility_config {
+#     networks {
+#       network_url = local.vpc_self_link
+#     }
+#   }
+# }
+#
+# resource "google_dns_record_set" "pkg_dev_a" {
+#   count        = local.create_dns_zone ? 1 : 0
+#   project      = var.project_id
+#   managed_zone = google_dns_managed_zone.pkg_dev[0].name
+#   name         = "pkg.dev."
+#   type         = "A"
+#   ttl          = 300
+#   rrdatas      = [var.psc_googleapis_ip]
+# }
+#
+# resource "google_dns_record_set" "pkg_dev_wildcard" {
+#   count        = local.create_dns_zone ? 1 : 0
+#   project      = var.project_id
+#   managed_zone = google_dns_managed_zone.pkg_dev[0].name
+#   name         = "*.pkg.dev."
+#   type         = "CNAME"
+#   ttl          = 300
+#   rrdatas      = ["pkg.dev."]
+# }
 
 # -----------------------------------------------------------------------------
 # Canonical local outputs (single source of truth, regardless of BYO vs create)
