@@ -207,7 +207,7 @@ module "workload_identity" {
       gsa_account_id = google_service_account.placeholder_for_iam_user.account_id
       create_sa      = false
       ksa_namespace  = var.app.namespace
-      ksa_name       = "cs-backend-ksa"
+      ksa_name       = var.app.backend_ksa_name
       project_roles = [
         "roles/aiplatform.user",
         "roles/cloudsql.client",
@@ -222,7 +222,7 @@ module "workload_identity" {
     frontend = {
       gsa_account_id = "${var.name_prefix}-fe-${var.environment}"
       ksa_namespace  = var.app.namespace
-      ksa_name       = "cs-frontend-ksa"
+      ksa_name       = var.app.frontend_ksa_name
       project_roles = [
         "roles/logging.logWriter",
         "roles/monitoring.metricWriter",

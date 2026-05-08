@@ -253,6 +253,8 @@ variable "app" {
       idp_display_name       = optional(string, "Corporate SSO")
     })
 
+    backend_ksa_name         = optional(string, "creative-studio-backend")
+    frontend_ksa_name        = optional(string, "creative-studio-frontend")
     backend_signing_sa_email = string
     workflows_executor_url   = optional(string, "")
   })
