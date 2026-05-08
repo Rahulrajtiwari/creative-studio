@@ -19,13 +19,15 @@ WORKDIR /app
 
 # Install only what package.json declares to keep the layer cached.
 COPY package*.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --ignore-scripts
 
 # Then copy the rest of the source.
 COPY . .
 
 # Production build: hashed assets, AOT, no source maps.
 ARG NG_CONFIGURATION=production
+# Increase Node memory limit to avoid Out-Of-Memory errors during Angular build
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build -- --configuration=${NG_CONFIGURATION}
 
 # --- Runtime stage ------------------------------------------------------------

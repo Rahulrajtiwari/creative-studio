@@ -137,14 +137,13 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
       };
     }>('/assets/runtime-config.json')
     .pipe(
-      map(remote => ({
+      map((remote: any) => ({
         authority: remote?.oidc?.authority,
         redirectUrl: `${origin}/`,
         postLogoutRedirectUri: `${origin}/login`,
         clientId: remote?.oidc?.clientId,
         scope: remote?.oidc?.scope || 'openid profile email',
         responseType: 'code',
-        usePkce: true,
         silentRenew: true,
         useRefreshToken: true,
         renewTimeBeforeTokenExpiresInSeconds: 60,
@@ -164,7 +163,6 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
           clientId: '',
           scope: 'openid profile email',
           responseType: 'code',
-          usePkce: true,
           silentRenew: false,
           logLevel: LogLevel.Warn,
         }),

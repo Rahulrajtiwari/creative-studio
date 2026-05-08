@@ -12,22 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# --- Build stage ----------------------------------------------------------
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+# --- Build stage (Production) ----------------------------------------------
+FROM asia-south1-docker.pkg.dev/ravi-argolis-01/creative-studio-dev/uv-base:latest AS builder
 
 WORKDIR /app
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
+# Install production dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-install-project --no-dev
 
 COPY . /app
+# Install the project in production mode
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
+
+# --- Test stage (Development) ----------------------------------------------
+FROM builder AS tester
+# Install dev dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync
+# Run tests (build will fail if tests fail)
+RUN uv run pytest
 
 # --- Runtime stage --------------------------------------------------------
 FROM python:3.12-slim-bookworm AS runtime

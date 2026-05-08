@@ -86,10 +86,8 @@ export class AdminAuthGuard implements CanActivate {
       );
 
       // Use async logout and navigate *after* logout completes
-      void this.authService.logout().then(() => {
-        console.log('Forced logout due to DEV email restriction complete.');
-        // Navigation is handled by the logout method itself
-      });
+      void this.authService.logout();
+      console.log('Forced logout due to DEV email restriction complete.');
       return false; // Prevent navigation
     }
   }

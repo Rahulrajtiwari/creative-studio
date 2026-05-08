@@ -3,13 +3,13 @@
 # `terraform output -raw helm_values_yaml` from infra/environments/dev.
 # -----------------------------------------------------------------------------
 global:
-  projectId: "creative-studio-dev"
-  region: "us-central1"
+  projectId: "ravi-argolis-01"
+  region: "asia-south1"
   environment: "dev"
   appHost: "creative-studio.dev.corp.example.com"
 
 image:
-  registry: "us-central1-docker.pkg.dev/creative-studio-dev/platform"
+  registry: "asia-south1-docker.pkg.dev/ravi-argolis-01/creative-studio-dev"
 
 backend:
   replicaCount: 2
@@ -19,7 +19,7 @@ backend:
   serviceAccount:
     googleServiceAccount: "creative-studio-backend@creative-studio-dev.iam.gserviceaccount.com"
   image:
-    tag: "REPLACE_AT_DEPLOY"
+    tag: "creative-studio-backend@sha256:d86453b41a8f877a89f105b7691f0f199721adb08bd33120dd66a220c4791c17"
   config:
     GENMEDIA_BUCKET: "creative-studio-dev-genmedia"
     VIDEO_BUCKET: "creative-studio-dev-video"
@@ -31,7 +31,7 @@ backend:
     DB_USER: "creative-studio-backend"
 
 cloudSqlProxy:
-  instanceConnectionName: "creative-studio-dev:us-central1:creative-studio-dev"
+  instanceConnectionName: "ravi-argolis-01:asia-south1:cs-pg-dev-b38e7508"
 
 frontend:
   replicaCount: 2
@@ -39,7 +39,7 @@ frontend:
     minReplicas: 2
     maxReplicas: 4
   image:
-    tag: "REPLACE_AT_DEPLOY"
+    tag: "creative-studio-frontend@sha256:703d00b16f5b9b9fd17327c9a0eae77017a7e40c4ec24d5aa9ab83a8e5837feb"
   config:
     OIDC_AUTHORITY: "https://login.example.com/idp"
     OIDC_CLIENT_ID: "creative-studio-dev"
