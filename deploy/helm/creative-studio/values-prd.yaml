@@ -1,11 +1,25 @@
-global:
-  projectId: "creative-studio-prd"
-  region: "us-central1"
-  environment: "prd"
-  appHost: "creative-studio.corp.example.com"
-
+# -----------------------------------------------------------------------------
+# PRD overlay. Hand-tuned per-environment values that are *not* produced by
+# Terraform (image tags, replica counts, resource limits, OIDC IdP details,
+# topology spread constraints).
+#
+# Infrastructure-derived values (project ID, region, GSA emails, Cloud SQL
+# instance connection name, DB user, ingress cert/IP, externalSecrets data
+# mapping, Cloud SQL PSA CIDR, etc.) MUST come from the Terraform output:
+#
+#   cd infra/environments/prd
+#   terraform output -json helm_values | jq '.' > /tmp/values-from-tf.json
+#
+#   helm upgrade --install creative-studio ../deploy/helm/creative-studio \
+#     -n creative-studio --create-namespace \
+#     -f /tmp/values-from-tf.json \
+#     -f ../deploy/helm/creative-studio/values-prd.yaml
+#
+# Critically, do NOT set `backend.config.DB_USER` here — Terraform sets it
+# to the IAM-auth user name derived from the GSA email, and overriding it
+# breaks DB auth.
+# -----------------------------------------------------------------------------
 image:
-  registry: "us-central1-docker.pkg.dev/creative-studio-prd/platform"
   pullPolicy: IfNotPresent
 
 backend:
@@ -16,8 +30,6 @@ backend:
     targetCPUUtilizationPercentage: 65
   podDisruptionBudget:
     minAvailable: 4
-  serviceAccount:
-    googleServiceAccount: "creative-studio-backend@creative-studio-prd.iam.gserviceaccount.com"
   image:
     tag: "REPLACE_AT_DEPLOY"
   resources:
@@ -28,14 +40,10 @@ backend:
       cpu: "4"
       memory: "8Gi"
   config:
-    GENMEDIA_BUCKET: "creative-studio-prd-genmedia"
-    VIDEO_BUCKET: "creative-studio-prd-video"
-    IMAGE_BUCKET: "creative-studio-prd-image"
     OIDC_ISSUER: "https://login.example.com/idp"
     OIDC_AUDIENCES: "creative-studio"
     OIDC_ALLOWED_EMAIL_DOMAINS: "example.com"
     OIDC_ALLOWED_GROUPS: "creative-studio-users,creative-studio-admins"
-    DB_USER: "creative-studio-backend"
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: topology.kubernetes.io/zone
@@ -46,7 +54,6 @@ backend:
           app.kubernetes.io/part-of: creative-studio
 
 cloudSqlProxy:
-  instanceConnectionName: "creative-studio-prd:us-central1:creative-studio-prd"
   resources:
     requests:
       cpu: "100m"
@@ -78,27 +85,6 @@ frontend:
           app.kubernetes.io/component: frontend
           app.kubernetes.io/part-of: creative-studio
 
-ingress:
-  preSharedCertName: "creative-studio-prd-ilb-cert"
-  staticIpName: "creative-studio-prd-ilb-ip"
-  hosts:
-    - host: "creative-studio.corp.example.com"
-      paths:
-        - path: /api
-          pathType: Prefix
-          serviceName: backend
-        - path: /
-          pathType: Prefix
-          serviceName: frontend
-
 migrations:
   image:
     tag: "REPLACE_AT_DEPLOY"
-
-externalSecrets:
-  enabled: true
-
-networkPolicies:
-  egress:
-    cloudSqlPsaCidrs:
-      - "10.70.0.0/24"

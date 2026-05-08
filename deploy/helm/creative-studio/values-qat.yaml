@@ -1,33 +1,35 @@
-global:
-  projectId: "creative-studio-qat"
-  region: "us-central1"
-  environment: "qat"
-  appHost: "creative-studio.qat.corp.example.com"
-
-image:
-  registry: "us-central1-docker.pkg.dev/creative-studio-qat/platform"
-
+# -----------------------------------------------------------------------------
+# QAT overlay. Hand-tuned per-environment values that are *not* produced by
+# Terraform (image tags, replica counts, OIDC IdP details).
+#
+# Infrastructure-derived values (project ID, region, GSA emails, Cloud SQL
+# instance connection name, DB user, ingress cert/IP, externalSecrets data
+# mapping, Cloud SQL PSA CIDR, etc.) MUST come from the Terraform output:
+#
+#   cd infra/environments/qat
+#   terraform output -json helm_values | jq '.' > /tmp/values-from-tf.json
+#
+#   helm upgrade --install creative-studio ../deploy/helm/creative-studio \
+#     -n creative-studio --create-namespace \
+#     -f /tmp/values-from-tf.json \
+#     -f ../deploy/helm/creative-studio/values-qat.yaml
+#
+# Critically, do NOT set `backend.config.DB_USER` here — Terraform sets it
+# to the IAM-auth user name derived from the GSA email, and overriding it
+# breaks DB auth.
+# -----------------------------------------------------------------------------
 backend:
   replicaCount: 3
   autoscaling:
     minReplicas: 3
     maxReplicas: 12
-  serviceAccount:
-    googleServiceAccount: "creative-studio-backend@creative-studio-qat.iam.gserviceaccount.com"
   image:
     tag: "REPLACE_AT_DEPLOY"
   config:
-    GENMEDIA_BUCKET: "creative-studio-qat-genmedia"
-    VIDEO_BUCKET: "creative-studio-qat-video"
-    IMAGE_BUCKET: "creative-studio-qat-image"
     OIDC_ISSUER: "https://login.example.com/idp"
     OIDC_AUDIENCES: "creative-studio-qat"
     OIDC_ALLOWED_EMAIL_DOMAINS: "example.com"
     OIDC_ALLOWED_GROUPS: "creative-studio-qat-users,creative-studio-admins"
-    DB_USER: "creative-studio-backend"
-
-cloudSqlProxy:
-  instanceConnectionName: "creative-studio-qat:us-central1:creative-studio-qat"
 
 frontend:
   replicaCount: 3
@@ -42,27 +44,6 @@ frontend:
     OIDC_AUDIENCE: "creative-studio-qat"
     OIDC_IDP_DISPLAY_NAME: "Corporate SSO (QAT)"
 
-ingress:
-  preSharedCertName: "creative-studio-qat-ilb-cert"
-  staticIpName: "creative-studio-qat-ilb-ip"
-  hosts:
-    - host: "creative-studio.qat.corp.example.com"
-      paths:
-        - path: /api
-          pathType: Prefix
-          serviceName: backend
-        - path: /
-          pathType: Prefix
-          serviceName: frontend
-
 migrations:
   image:
     tag: "REPLACE_AT_DEPLOY"
-
-externalSecrets:
-  enabled: true
-
-networkPolicies:
-  egress:
-    cloudSqlPsaCidrs:
-      - "10.60.0.0/24"

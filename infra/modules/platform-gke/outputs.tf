@@ -110,16 +110,20 @@ output "helm_values" {
         googleServiceAccount = google_service_account.placeholder_for_iam_user.email
       }
       config = {
-        PROJECT_ID                  = var.project_id
-        LOCATION                    = var.region
-        FRONTEND_URL                = "https://${var.app.fqdn}"
-        BACKEND_URL                 = "https://${var.app.fqdn}"
-        WORKFLOWS_EXECUTOR_URL      = trimspace(var.app.workflows_executor_url) != "" ? var.app.workflows_executor_url : "https://${var.app.fqdn}/api/workflows-executor"
-        DB_HOST                     = "127.0.0.1"
-        DB_PORT                     = "5432"
-        DB_NAME                     = var.cloudsql.db_name
-        DB_USER                     = var.cloudsql.db_user
-        USE_CLOUD_SQL_AUTH_PROXY    = "true"
+        PROJECT_ID             = var.project_id
+        LOCATION               = var.region
+        FRONTEND_URL           = "https://${var.app.fqdn}"
+        BACKEND_URL            = "https://${var.app.fqdn}"
+        WORKFLOWS_EXECUTOR_URL = trimspace(var.app.workflows_executor_url) != "" ? var.app.workflows_executor_url : "https://${var.app.fqdn}/api/workflows-executor"
+        DB_HOST                = "127.0.0.1"
+        DB_PORT                = "5432"
+        DB_NAME                = var.cloudsql.db_name
+        # With cloudSqlProxy.iamAuthn=true (the default), the proxy authenticates
+        # using the GSA's OAuth token AND the DB user must be the GSA email with
+        # the ".gserviceaccount.com" suffix stripped. Cloud SQL creates this IAM
+        # DB user via google_sql_user.iam in the cloudsql-private module.
+        DB_USER                  = trimsuffix(google_service_account.placeholder_for_iam_user.email, ".gserviceaccount.com")
+        USE_CLOUD_SQL_AUTH_PROXY = "true"
         GENMEDIA_BUCKET             = module.gcs.name
         VIDEO_BUCKET                = module.gcs.name
         IMAGE_BUCKET                = module.gcs.name
@@ -172,6 +176,20 @@ output "helm_values" {
     networkPolicies = {
       egress = {
         cloudSqlPsaCidrs = [var.network.psa_range_cidr]
+      }
+    }
+
+    # External Secrets mapping. With Cloud SQL IAM auth (the default), the
+    # backend authenticates via the proxy's OAuth token and DB_PASS is
+    # ignored, so this mapping is harmless. It is required when an operator
+    # disables iamAuthn (e.g. BYO Cloud SQL without IAM auth) so the backend
+    # can fetch the password from Secret Manager via the External Secrets
+    # Operator. The ESO ClusterSecretStore must use Workload Identity bound
+    # to a GSA with roles/secretmanager.secretAccessor on db_password_secret_id.
+    externalSecrets = {
+      enabled = true
+      data = {
+        DB_PASS = var.cloudsql.db_password_secret_id
       }
     }
   }
