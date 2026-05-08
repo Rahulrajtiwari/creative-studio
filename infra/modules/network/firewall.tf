@@ -18,8 +18,11 @@
 #   plus the absence of any 0.0.0.0/0 allow rule.
 # - The rules below are the only ingress paths permitted into nodes:
 #     1. Internal HTTPS LB health checks + proxies (proxy-only subnet)
-#     2. Master to nodes for kubelet (Google manages this automatically when
-#        you enable private clusters; no rule needed here).
+#     2. Master to nodes for kubelet (10250), webhooks (8443/9443), and the
+#        kube-apiserver TLS port (443). GKE auto-creates a similar rule for
+#        new clusters, but we manage it explicitly so `kubectl exec`,
+#        `kubectl logs`, `port-forward`, and admission webhooks don't silently
+#        break if that auto-rule is ever deleted by an admin or org policy.
 # - Egress rules are kept tight: only to PSC endpoint, to Cloud SQL PSA range,
 #   intra-VPC, and (optionally) IdP CIDRs.
 # -----------------------------------------------------------------------------
@@ -42,6 +45,26 @@ resource "google_compute_firewall" "ingress_lb_health_checks" {
   allow {
     protocol = "tcp"
     ports    = ["8080", "80", "443"]
+  }
+}
+
+# Allow the GKE control plane (master CIDR) to reach kubelet + webhook ports
+# on nodes. Required for `kubectl exec`, `kubectl logs`, `kubectl port-forward`,
+# admission webhooks, and metrics scraping. Without this, those operations
+# fail with i/o timeouts on TCP 10250.
+resource "google_compute_firewall" "ingress_master_to_nodes" {
+  name        = "${var.name_prefix}-allow-master-to-nodes-${var.environment}"
+  project     = var.project_id
+  network     = local.vpc_self_link
+  description = "Allow GKE master CIDR to reach kubelet (10250), webhooks (8443/9443), and TLS (443) on nodes."
+  direction   = "INGRESS"
+  priority    = 990
+
+  source_ranges = [var.master_cidr]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["443", "10250", "8443", "9443", "15017"]
   }
 }
 
