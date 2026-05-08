@@ -98,6 +98,19 @@ spec:
           port: {{ .Values.networkPolicies.egress.dnsPort }}
         - protocol: TCP
           port: {{ .Values.networkPolicies.egress.dnsPort }}
+    # GKE metadata server (link-local). REQUIRED for Workload Identity:
+    # Application Default Credentials are sourced from this endpoint, so
+    # blocking it causes every GCP API call (Cloud SQL Auth Proxy, Vertex AI,
+    # Secret Manager, GCS, ...) to fail with "could not find default
+    # credentials" or 401/403 errors.
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 988
     - to:
         {{- range .Values.networkPolicies.egress.googleApisCidrs }}
         - ipBlock:
