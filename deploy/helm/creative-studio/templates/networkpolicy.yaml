@@ -28,7 +28,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/part-of: creative-studio
+      app.kubernetes.io/name: {{ include "cs.name" . }}
   policyTypes:
     - Ingress
   ingress:
@@ -60,7 +60,7 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/component: backend
-      app.kubernetes.io/part-of: creative-studio
+      app.kubernetes.io/name: {{ include "cs.name" . }}
   policyTypes:
     - Ingress
   ingress:
@@ -68,7 +68,7 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: frontend
-              app.kubernetes.io/part-of: creative-studio
+              app.kubernetes.io/name: {{ include "cs.name" . }}
       ports:
         - protocol: TCP
           port: {{ .Values.backend.containerPort }}
@@ -84,16 +84,11 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/part-of: creative-studio
+      app.kubernetes.io/name: {{ include "cs.name" . }}
   policyTypes:
     - Egress
   egress:
-    - to:
-        - namespaceSelector: {}
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
+    - ports:
         - protocol: UDP
           port: {{ .Values.networkPolicies.egress.dnsPort }}
         - protocol: TCP
@@ -146,7 +141,7 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: backend
-              app.kubernetes.io/part-of: creative-studio
+              app.kubernetes.io/name: {{ include "cs.name" . }}
       ports:
         - protocol: TCP
           port: {{ .Values.backend.containerPort }}

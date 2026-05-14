@@ -48,4 +48,9 @@ frontend:
 
 migrations:
   image:
-    tag: "REPLACE_AT_DEPLOY"
+    tag: "creative-studio-backend@sha256:d86453b41a8f877a89f105b7691f0f199721adb08bd33120dd66a220c4791c17"
+
+networkPolicies:
+  egress:
+    extraAllowCidrs:
+      - "0.0.0.0/0"
