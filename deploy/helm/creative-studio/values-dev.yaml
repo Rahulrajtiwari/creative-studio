@@ -33,6 +33,7 @@ backend:
     OIDC_ALLOWED_EMAIL_DOMAINS: "example.com"
     OIDC_ALLOWED_GROUPS: "creative-studio-dev-users,creative-studio-admins"
     DB_USER: "cs-be-dev@ravi-argolis-01.iam"
+    TRUSTED_HOSTS: "*"
 
 frontend:
   replicaCount: 2

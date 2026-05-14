@@ -48,6 +48,16 @@ spec:
       {{- with .Values.frontend.topologySpreadConstraints }}
       topologySpreadConstraints: {{ toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+        - name: init-assets
+          image: {{ include "cs.frontend.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ['sh', '-c', 'cp -r /usr/share/nginx/html/assets/* /mnt/assets/']
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: assets-vol
+              mountPath: /mnt/assets
       containers:
         - name: nginx
           image: {{ include "cs.frontend.image" . }}
