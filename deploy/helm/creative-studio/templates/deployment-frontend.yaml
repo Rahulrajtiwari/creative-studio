@@ -89,6 +89,8 @@ spec:
               mountPath: /tmp
             - name: nginx-conf
               mountPath: /etc/nginx/conf.d
+            - name: assets-vol
+              mountPath: /usr/share/nginx/html/assets
       volumes:
         - name: nginx-cache
           emptyDir:
@@ -103,4 +105,7 @@ spec:
         - name: nginx-conf
           emptyDir:
             sizeLimit: 8Mi
+        - name: assets-vol
+          emptyDir:
+            sizeLimit: 16Mi
 {{- end }}

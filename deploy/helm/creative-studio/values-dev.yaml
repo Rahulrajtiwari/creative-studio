@@ -32,6 +32,7 @@ backend:
     OIDC_AUDIENCES: "creative-studio-dev"
     OIDC_ALLOWED_EMAIL_DOMAINS: "example.com"
     OIDC_ALLOWED_GROUPS: "creative-studio-dev-users,creative-studio-admins"
+    DB_USER: "cs-be-dev@ravi-argolis-01.iam"
 
 frontend:
   replicaCount: 2
