@@ -139,6 +139,10 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
     .pipe(
       map((remote: any) => ({
         authority: remote?.oidc?.authority,
+        // IMPORTANT: this URL must be registered, character-for-character, as
+        // an "Authorized redirect URI" on the OAuth 2.0 client in the Google
+        // Cloud Console (APIs & Services -> Credentials). Mismatch here is
+        // what produces `Error 400: redirect_uri_mismatch`.
         redirectUrl: `${origin}/`,
         postLogoutRedirectUri: `${origin}/login`,
         clientId: remote?.oidc?.clientId,
@@ -148,12 +152,14 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
         useRefreshToken: true,
         renewTimeBeforeTokenExpiresInSeconds: 60,
         ignoreNonceAfterRefresh: true,
+        // Authorization Code + PKCE is used for SPAs; no client_secret is
+        // sent from the browser. The OAuth client in the Cloud Console must
+        // be created as a "Web application" client with PKCE enabled (which
+        // is the default for the Google Identity flow). NEVER ship a
+        // client_secret in the SPA bundle - it would be world-readable.
         customParamsAuthRequest: remote?.oidc?.audience
           ? {audience: remote.oidc.audience}
           : undefined,
-        customParamsTokenRequest: {
-          client_secret: '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',
-        },
         secureRoutes: ['/api/'],
         logLevel: LogLevel.Warn,
         historyCleanupOff: false,

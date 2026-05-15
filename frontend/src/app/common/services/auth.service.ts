@@ -24,7 +24,7 @@ import {Injectable, PLATFORM_ID, inject} from '@angular/core';
 import {Router} from '@angular/router';
 import {OidcSecurityService} from 'angular-auth-oidc-client';
 import {Observable, firstValueFrom, of, throwError} from 'rxjs';
-import {catchError, map, switchMap, take, tap} from 'rxjs/operators';
+import {catchError, map, shareReplay, switchMap, take, tap} from 'rxjs/operators';
 
 import {RuntimeConfigService} from '../../runtime-config.service';
 import {UserModel, UserRolesEnum} from '../models/user.model';
@@ -57,6 +57,19 @@ export class AuthService {
   };
 
   /**
+   * Memoised initialize() pipeline. `OidcSecurityService.checkAuth()` consumes
+   * the `?code=...` authorization-code response from the URL exactly once;
+   * calling it twice with the same code makes Google's /token endpoint return
+   * `400 invalid_grant` on the second attempt, which the OIDC library then
+   * treats as a session error and clears the just-established session. Because
+   * both AppComponent and the AuthGuard subscribe to initialize() during the
+   * very first navigation after the IdP redirect, we MUST share a single
+   * underlying checkAuth() across every subscriber for the lifetime of the
+   * app.
+   */
+  private initialize$: Observable<OidcSessionState> | null = null;
+
+  /**
    * Resolve the OIDC session state on app start. Should be called from the
    * AppComponent to ensure the silent-renew callback / login response is
    * processed before any guarded route is evaluated.
@@ -66,7 +79,11 @@ export class AuthService {
       return of(this.session);
     }
 
-    return this.oidc.checkAuth().pipe(
+    if (this.initialize$) {
+      return this.initialize$;
+    }
+
+    this.initialize$ = this.oidc.checkAuth().pipe(
       switchMap(({isAuthenticated, accessToken, idToken}) => {
         this.session = {
           authenticated: isAuthenticated,
@@ -81,9 +98,18 @@ export class AuthService {
         // Sync the user profile with the backend on every successful auth.
         return this.syncUserWithBackend$(idToken || accessToken).pipe(
           map(() => this.session),
+          // If the /users/me sync itself fails we still consider the OIDC
+          // session valid; the user can retry the failed call. Crucially we
+          // do NOT propagate the error and force a logout here.
+          catchError(err => {
+            console.warn('User profile sync failed after login:', err);
+            return of(this.session);
+          }),
         );
       }),
+      shareReplay({bufferSize: 1, refCount: false}),
     );
+    return this.initialize$;
   }
 
   /** Begin the OIDC Authorization Code + PKCE flow. */
@@ -101,6 +127,8 @@ export class AuthService {
       idToken: null,
       expiresAt: null,
     };
+    // Invalidate the cached initialize() so the next login re-runs checkAuth().
+    this.initialize$ = null;
     localStorage.removeItem(USER_DETAILS);
     this.oidc.logoff().subscribe({
       error: err => {

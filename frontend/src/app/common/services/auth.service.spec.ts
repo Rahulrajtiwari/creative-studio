@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-import {HttpClientTestingModule} from '@angular/common/http/testing';
+import {
+  HttpClientTestingModule,
+  HttpTestingController,
+} from '@angular/common/http/testing';
 import {TestBed} from '@angular/core/testing';
 import {RouterTestingModule} from '@angular/router/testing';
 import {OidcSecurityService} from 'angular-auth-oidc-client';
@@ -98,5 +101,56 @@ describe('AuthService (OIDC)', () => {
       expect(token).toBe('access-token');
       done();
     });
+  });
+
+  // Regression: previously AppComponent.ngOnInit and the AuthGuard each
+  // called initialize() separately. Each call invoked OidcSecurityService
+  // .checkAuth(), which in turn consumed the `?code=...` authorization-code
+  // response. Calling it twice meant Google's /token endpoint received the
+  // same code twice; the second exchange returned 400 invalid_grant and the
+  // library cleared the session - giving the user the "logged in for a
+  // millisecond then bounced back to /login" symptom. initialize() must
+  // multicast the result of a single checkAuth() to every caller.
+  it('initialize() only calls OidcSecurityService.checkAuth() once even when subscribed multiple times', done => {
+    const svc = TestBed.inject(AuthService);
+    const httpMock = TestBed.inject(HttpTestingController);
+    let resolved = 0;
+    const onSession = () => {
+      resolved++;
+      if (resolved === 2) {
+        expect(oidcSpy.checkAuth).toHaveBeenCalledTimes(1);
+        done();
+      }
+    };
+    svc.initialize().subscribe(onSession);
+    svc.initialize().subscribe(onSession);
+    // Flush the one /users/me sync triggered by the single checkAuth() run.
+    const reqs = httpMock.match(r => r.url.endsWith('/users/me'));
+    expect(reqs.length).toBe(1);
+    reqs.forEach(r =>
+      r.flush({name: 'X', email: 'x@example.com', picture: '', roles: []}),
+    );
+  });
+
+  it('initialize() can be re-run after logout (cache is invalidated)', done => {
+    const svc = TestBed.inject(AuthService);
+    const httpMock = TestBed.inject(HttpTestingController);
+
+    svc.initialize().subscribe(() => {
+      svc.logout();
+      svc.initialize().subscribe(() => {
+        expect(oidcSpy.checkAuth).toHaveBeenCalledTimes(2);
+        done();
+      });
+      const after = httpMock.match(r => r.url.endsWith('/users/me'));
+      after.forEach(r =>
+        r.flush({name: 'X', email: 'x@example.com', picture: '', roles: []}),
+      );
+    });
+
+    const first = httpMock.match(r => r.url.endsWith('/users/me'));
+    first.forEach(r =>
+      r.flush({name: 'X', email: 'x@example.com', picture: '', roles: []}),
+    );
   });
 });

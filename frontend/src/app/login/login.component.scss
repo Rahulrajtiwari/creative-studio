@@ -14,6 +14,77 @@
  * limitations under the License.
  */
 
+// ---------------------------------------------------------------------------
+// Layout: plain CSS (no reliance on Tailwind responsive utilities). This page
+// is shown before any auth state is known, so it must look correct on the
+// very first paint even if the Tailwind utility classes are purged or have
+// not yet been parsed by the browser.
+// ---------------------------------------------------------------------------
+:host {
+  display: block;
+  color: white;
+}
+
+.login-shell {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: #1f1f1f; // Solid fallback while the video buffers.
+}
+
+.login-bg-video {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+  background: #1f1f1f;
+}
+
+.login-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  padding: 1.25rem;
+  min-height: 100vh;
+  align-items: center;
+  justify-items: center;
+  text-align: center;
+}
+
+// Two-column layout on screens wide enough to read both columns.
+@media (min-width: 992px) {
+  .login-grid {
+    grid-template-columns: 1fr 1fr;
+    padding: 2rem 4rem;
+  }
+}
+
+.login-tagline {
+  display: none; // Hidden on small screens; the card already carries the brand.
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 992px) {
+  .login-tagline {
+    display: flex;
+  }
+}
+
+.login-card-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
 .linear-text {
   background: linear-gradient(
     89.9deg,
@@ -55,10 +126,13 @@
 .login-card {
   flex-direction: column;
   display: flex;
-  padding: 3%;
+  padding: 2rem;
   margin: auto;
   width: 100%;
+  max-width: 420px;
   align-items: center;
+  border-radius: 1rem;
+  text-align: center;
 
   background: rgba(255, 255, 255, 0.1) !important;
   backdrop-filter: blur(10px);
@@ -73,6 +147,9 @@
 .login-btn {
   background-color: white !important;
   color: blue !important;
+  width: 100%;
+  height: 3rem;
+  font-size: 1rem;
 }
 
 // Small devices (landscape phones, 576px and up)
