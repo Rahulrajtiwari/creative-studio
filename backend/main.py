@@ -30,6 +30,7 @@ from sqlalchemy import text
 
 from src.admin.admin_controller import router as admin_router
 from src.audios.audio_controller import router as audio_router
+from src.auth.auth_controller import router as auth_router
 from src.brand_guidelines.brand_guideline_controller import (
     router as brand_guideline_router,
 )
@@ -215,6 +216,10 @@ def version() -> str:
 # -----------------------------------------------------------------------------
 # Routers
 # -----------------------------------------------------------------------------
+# Auth router first — its /api/auth/token endpoint is unauthenticated and
+# bootstraps the user session, so it must register before any global auth
+# dependency wiring that other routers might add later.
+app.include_router(auth_router)
 app.include_router(imagen_router)
 app.include_router(admin_router)
 app.include_router(audio_router)

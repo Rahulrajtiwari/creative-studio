@@ -73,6 +73,24 @@ class ConfigService(BaseSettings):
     OIDC_REQUIRE_EMAIL_VERIFIED: bool = True
     JWKS_CACHE_TTL_SEC: int = 3600
 
+    # Backend-mediated token exchange (BFF). The SPA's OIDC client is told
+    # (via authWellknownEndpoints.tokenEndpoint) to POST authorization codes
+    # to /api/auth/token on our backend instead of directly to the IdP. The
+    # backend forwards the request to the IdP with OIDC_CLIENT_SECRET added,
+    # which keeps the secret out of the browser bundle. Required whenever
+    # the upstream OAuth client is a "confidential" client (e.g. Google's
+    # `Web application` client type, which rejects token requests without a
+    # secret even when PKCE is used).
+    OIDC_CLIENT_ID: str = Field(
+        default="",
+        description="OAuth client ID used to validate /api/auth/token requests.",
+    )
+    OIDC_CLIENT_SECRET: str = Field(
+        default="",
+        description="OAuth client secret. Mounted from a Kubernetes Secret; never logged.",
+    )
+    OIDC_TOKEN_PROXY_TIMEOUT_SEC: float = 10.0
+
     # ------------------------------------------------------------------
     # Storage
     # ------------------------------------------------------------------

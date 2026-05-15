@@ -113,4 +113,21 @@ describe('AuthInterceptor', () => {
     });
     httpMock.expectNone('/api/workspaces');
   });
+
+  // Regression: the BFF token-exchange endpoint (POST /api/auth/token) is what
+  // *creates* the session, so it can never carry a Bearer token. If the
+  // interceptor gated it on initialize() the OIDC library's very first
+  // /token call would be swallowed (it fires while the user is still
+  // unauthenticated) and login would silently hang on a blank page.
+  it('does NOT gate or modify requests to /api/auth/* (pre-auth endpoints)', () => {
+    configure(false, null);
+    http
+      .post('/api/auth/token', 'grant_type=authorization_code&code=abc')
+      .subscribe();
+    const req = httpMock.expectOne('/api/auth/token');
+    expect(req.request.headers.get('Authorization')).toBeNull();
+    expect(authSpy.initialize).not.toHaveBeenCalled();
+    expect(authSpy.getValidAccessToken$).not.toHaveBeenCalled();
+    req.flush({access_token: 'tok'});
+  });
 });

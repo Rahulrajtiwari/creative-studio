@@ -85,6 +85,11 @@ backend:
     OIDC_AUTHORIZED_PARTY: ""   # optional
     OIDC_REQUIRE_EMAIL_VERIFIED: "true"
     JWKS_CACHE_TTL_SEC: "3600"
+    # BFF token-exchange proxy (/api/auth/token). The SPA never sees
+    # OIDC_CLIENT_SECRET; the value lives in the Secret named below and
+    # is mounted as an env var on the backend pod.
+    OIDC_CLIENT_ID: ""          # REQUIRED, must match the SPA's clientId
+    OIDC_TOKEN_PROXY_TIMEOUT_SEC: "10.0"
     USE_CLOUD_SQL_AUTH_PROXY: "true"
     DB_HOST: "127.0.0.1"
     DB_PORT: "5432"
@@ -300,6 +305,21 @@ networkPolicies:
 # -----------------------------------------------------------------------------
 # External Secrets Operator integration (recommended over plain Secrets).
 # -----------------------------------------------------------------------------
+# Backend secrets surfaced to the pod via envFrom (see templates/secret.yaml
+# and templates/externalsecret.yaml). The keys here become environment
+# variables on the backend container; the values are either fetched from
+# GCP Secret Manager (when externalSecrets.enabled=true) or supplied inline
+# under `fallbackSecretData` (test/dev only).
+#
+# Required keys consumed by the backend:
+#   - OIDC_CLIENT_SECRET    OAuth client secret used by the /api/auth/token
+#                           BFF proxy. NEVER exposed to the browser.
+#
+# Example with ESO (production):
+#   externalSecrets:
+#     enabled: true
+#     data:
+#       OIDC_CLIENT_SECRET: "projects/<proj>/secrets/oidc-client-secret/versions/latest"
 externalSecrets:
   enabled: false
   # Name of an existing ClusterSecretStore that authenticates to GCP Secret

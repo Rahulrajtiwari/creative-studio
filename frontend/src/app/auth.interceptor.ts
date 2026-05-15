@@ -108,8 +108,16 @@ export class AuthInterceptor implements HttpInterceptor {
     // Only attach to backend API calls. The runtime config and static assets
     // must remain unauthenticated.
     if (url.startsWith('/assets/')) return false;
+    // /api/auth/* endpoints (the BFF token-exchange proxy and any future
+    // pre-auth bootstrap helpers) MUST stay anonymous. They are what
+    // *creates* the session, so they can never carry a Bearer token. If we
+    // tried, the interceptor would either gate them on `initialize()` (which
+    // hasn't completed yet on the very first call) or attach an empty
+    // header and confuse the IdP.
+    if (url.startsWith('/api/auth/')) return false;
     const apiBase = this.runtimeConfig.config.backendURL;
-    if (url.startsWith(apiBase)) return true;
+    if (apiBase && url.startsWith(`${apiBase}/auth/`)) return false;
+    if (apiBase && url.startsWith(apiBase)) return true;
     if (url.startsWith('/api/')) return true;
     return false;
   }

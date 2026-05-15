@@ -32,6 +32,30 @@ backend:
     TRUSTED_HOSTS: "*"
     OIDC_ISSUER: "https://accounts.google.com"
     OIDC_AUDIENCES: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
+    # OIDC_CLIENT_ID is the public OAuth client ID. The matching secret
+    # lives under externalSecrets.fallbackSecretData.OIDC_CLIENT_SECRET
+    # (dev) or in GCP Secret Manager (production - see values.yaml).
+    OIDC_CLIENT_ID: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
+
+# -----------------------------------------------------------------------------
+# Backend secrets — sourced from GCP Secret Manager via External Secrets
+# Operator. The ClusterSecretStore referenced below ("gcp-secret-manager")
+# must already exist in the cluster and be authenticated to GCP Secret
+# Manager via Workload Identity. The backend's GSA also needs
+# `roles/secretmanager.secretAccessor` on the listed secrets.
+#
+# Each key in `data` becomes an env var on the backend pod; each value is
+# the GCP Secret Manager secret name (NOT the full resource path - the
+# project is supplied by the ClusterSecretStore).
+# -----------------------------------------------------------------------------
+externalSecrets:
+  enabled: true
+  refreshInterval: "1h"
+  secretStoreRefName: "gcp-secret-manager"
+  data:
+    # OAuth client secret used by /api/auth/token (BFF token-exchange proxy).
+    # The browser never receives this value.
+    OIDC_CLIENT_SECRET: "agent_oauth_test_v1_791654394327"
 
 frontend:
   replicaCount: 2

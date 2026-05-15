@@ -167,11 +167,24 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
           useRefreshToken: !onGoogle,
           renewTimeBeforeTokenExpiresInSeconds: 60,
           ignoreNonceAfterRefresh: true,
-          // Authorization Code + PKCE is used for SPAs; no client_secret is
-          // sent from the browser. The OAuth client in the Cloud Console
-          // must be created as a "Web application" client with PKCE enabled
-          // (which is the default for the Google Identity flow). NEVER ship
-          // a client_secret in the SPA bundle - it would be world-readable.
+          // -----------------------------------------------------------------
+          // BFF token exchange. Google's "Web application" OAuth client type
+          // is confidential and rejects /token requests without a
+          // `client_secret`, even with PKCE. We solve this without putting
+          // the secret in the SPA bundle by overriding the discovered
+          // token_endpoint and routing it through our own backend, which
+          // appends OIDC_CLIENT_SECRET server-side and forwards to the IdP.
+          //
+          // angular-auth-oidc-client overlays `authWellknownEndpoints` on
+          // top of the values it discovers from the IdP's well-known
+          // metadata, so we only need to set the one field we care about
+          // (`tokenEndpoint`) and the rest (jwks_uri, authorization_endpoint,
+          // userinfo_endpoint, end_session_endpoint, …) still come from the
+          // IdP itself. id_token signature/issuer validation is unaffected.
+          // -----------------------------------------------------------------
+          authWellknownEndpoints: {
+            tokenEndpoint: `${origin}/api/auth/token`,
+          },
           customParamsAuthRequest:
             !onGoogle && remote?.oidc?.audience
               ? {audience: remote.oidc.audience}
