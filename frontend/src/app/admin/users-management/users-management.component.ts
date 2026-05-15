@@ -91,7 +91,7 @@ export class UsersManagementComponent implements OnInit, OnDestroy {
       void this.fetchPage(0);
     }
 
-    // Debounce filter input to avoid excessive Firestore reads
+    // Debounce filter input to avoid hammering the backend on every keystroke.
     this.filterSubject
       .pipe(debounceTime(500), distinctUntilChanged(), takeUntil(this.destroy$))
       .subscribe(filterValue => {

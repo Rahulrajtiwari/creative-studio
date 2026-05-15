@@ -71,10 +71,15 @@ export class HeaderComponent implements OnDestroy {
     @Inject(PLATFORM_ID) platformId: Object,
   ) {
     this.isBrowser = isPlatformBrowser(platformId);
-    // Initialize menuFixed from localStorage
+    // Initialize menuFixed from localStorage. On a first visit (no stored
+    // preference) we default to TRUE so the side nav is visible right
+    // after login - this matches the reference UI where the icons are
+    // always pinned, instead of only appearing on hover.
     if (this.isBrowser) {
       const storedMenuFixed = localStorage.getItem('menuFixed');
-      this.menuFixed = storedMenuFixed === 'true';
+      this.menuFixed = storedMenuFixed === null ? true : storedMenuFixed === 'true';
+    } else {
+      this.menuFixed = true;
     }
 
     this.matIconRegistry

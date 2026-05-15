@@ -1,6 +1,5 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
-.firebase/
 *environment.*
 !environment.ts
 !environment.prod.ts

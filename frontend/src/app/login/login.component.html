@@ -31,8 +31,10 @@
     <!-- Left column: tagline (desktop) -->
     <div class="login-tagline">
       <p class="login-app-text">
-        <span class="linear-text">Create</span> at the speed <br />
+        <span class="linear-text">Create</span> at the speed
+        <br />
         of <span class="linear-text">thought</span>
+        <span class="rocket" aria-hidden="true">&#128640;</span>
       </p>
     </div>
 
@@ -41,26 +43,26 @@
       <mat-card class="login-card">
         <mat-card-header class="!justify-center">
           <mat-card-title>
-            <h1 class="mat-display-large mb-5">
+            <h1 class="login-brand">
               Creative <span class="linear-text">Studio</span>
             </h1>
           </mat-card-title>
         </mat-card-header>
-        <mat-card-content class="flex flex-col items-center">
-          <p class="register-text mb-4">
-            Sign in with your corporate identity provider to continue.
+        <mat-card-content class="login-card-content">
+          <p class="register-text">
+            Single Sign on with your {{ idpDisplayName }} Account
           </p>
           <button
             mat-raised-button
-            color="primary"
             (click)="loginWithSso()"
             class="login-btn"
+            [disabled]="loader"
           >
-            Sign in with {{ idpDisplayName }}
+            <span class="login-btn-label">Login with {{ idpDisplayName }}</span>
           </button>
           <mat-spinner
-            class="mt-5 m-auto"
-            [diameter]="50"
+            class="login-spinner"
+            [diameter]="32"
             *ngIf="this.loader"
           ></mat-spinner>
         </mat-card-content>

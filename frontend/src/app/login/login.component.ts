@@ -42,7 +42,9 @@ export class LoginComponent implements OnInit, AfterViewInit {
   loader = false;
   errorMessage = '';
   isBrowser: boolean;
-  idpDisplayName = 'Corporate SSO';
+  // Default to "Google" so the card matches the reference UI out of the box.
+  // Overridden at runtime by `OIDC_IDP_DISPLAY_NAME` -> runtime-config.json.
+  idpDisplayName = 'Google';
 
   @ViewChild('bgVideo') bgVideoRef?: ElementRef<HTMLVideoElement>;
 
@@ -58,7 +60,7 @@ export class LoginComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.idpDisplayName =
-      this.runtimeConfig.config.oidc.idpDisplayName || 'Corporate SSO';
+      this.runtimeConfig.config.oidc.idpDisplayName || 'Google';
 
     // If the user is already authenticated (e.g. they refreshed the page or
     // came back from a silent renew) bounce them straight to home.

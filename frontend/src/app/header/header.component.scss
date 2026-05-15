@@ -87,7 +87,11 @@
     align-items: center;
     flex-direction: column;
     padding: 7px 0 8px 0;
-    max-height: 4.5rem;
+    // Default to fully expanded so the side-nav icons are visible right
+    // after login. The previous default of `max-height: 4.5rem` required
+    // the user to hover the avatar (or toggle menuFixed) to even see the
+    // icons - which is the "icons not fixed" symptom from the screenshots.
+    max-height: 50rem;
     transition: max-height 0.4s ease-in-out;
 
     .user-profile-button {
@@ -98,11 +102,6 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-    }
-
-    &:hover,
-    &.fixed-menu {
-      max-height: 50rem;
     }
   }
 }
@@ -125,7 +124,7 @@
     justify-content: flex-start;
     align-items: center;
     flex-direction: column;
-    max-height: 4.5rem;
+    max-height: 50rem;
     transition: max-height 0.4s ease-in-out;
 
     .user-profile-button {
@@ -136,11 +135,6 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-    }
-
-    &:hover,
-    &.fixed-menu {
-      max-height: 50rem;
     }
   }
 }

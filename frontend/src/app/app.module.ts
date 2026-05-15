@@ -27,7 +27,7 @@ import {HttpClient} from '@angular/common/http';
 import {APP_INITIALIZER, Injector, NgModule} from '@angular/core';
 import {FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {Observable, of} from 'rxjs';
-import {catchError, map} from 'rxjs/operators';
+import {catchError, map, shareReplay} from 'rxjs/operators';
 import {MatButtonModule} from '@angular/material/button';
 import {MatButtonToggleModule} from '@angular/material/button-toggle';
 import {MatCardModule} from '@angular/material/card';
@@ -125,6 +125,9 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
   const origin =
     typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4200';
 
+  const isGoogleAuthority = (authority?: string): boolean =>
+    !!authority && /(^https:\/\/)?accounts\.google\.com\/?$/.test(authority);
+
   const config$: Observable<OpenIdConfiguration> = http
     .get<{
       backendURL: string;
@@ -137,33 +140,47 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
       };
     }>('/assets/runtime-config.json')
     .pipe(
-      map((remote: any) => ({
-        authority: remote?.oidc?.authority,
-        // IMPORTANT: this URL must be registered, character-for-character, as
-        // an "Authorized redirect URI" on the OAuth 2.0 client in the Google
-        // Cloud Console (APIs & Services -> Credentials). Mismatch here is
-        // what produces `Error 400: redirect_uri_mismatch`.
-        redirectUrl: `${origin}/`,
-        postLogoutRedirectUri: `${origin}/login`,
-        clientId: remote?.oidc?.clientId,
-        scope: remote?.oidc?.scope || 'openid profile email',
-        responseType: 'code',
-        silentRenew: true,
-        useRefreshToken: true,
-        renewTimeBeforeTokenExpiresInSeconds: 60,
-        ignoreNonceAfterRefresh: true,
-        // Authorization Code + PKCE is used for SPAs; no client_secret is
-        // sent from the browser. The OAuth client in the Cloud Console must
-        // be created as a "Web application" client with PKCE enabled (which
-        // is the default for the Google Identity flow). NEVER ship a
-        // client_secret in the SPA bundle - it would be world-readable.
-        customParamsAuthRequest: remote?.oidc?.audience
-          ? {audience: remote.oidc.audience}
-          : undefined,
-        secureRoutes: ['/api/'],
-        logLevel: LogLevel.Warn,
-        historyCleanupOff: false,
-      })),
+      map((remote: any) => {
+        const authority: string | undefined = remote?.oidc?.authority;
+        // Google does NOT issue refresh tokens to SPA / PKCE web clients,
+        // and its X-Frame-Options blocks iframe-based silent renew. If we
+        // leave `useRefreshToken: true` enabled against Google,
+        // angular-auth-oidc-client schedules a silent renew that always
+        // fails and ends up clearing the session. Detect the Google
+        // issuer and turn renewal off for it; the access token from the
+        // initial code exchange is valid for ~1h and that's fine for now.
+        // For non-Google IdPs we keep the refresh-token-based silent
+        // renewal that the rest of the SPA relies on.
+        const onGoogle = isGoogleAuthority(authority);
+        return {
+          authority,
+          // IMPORTANT: this URL must be registered, character-for-character,
+          // as an "Authorized redirect URI" on the OAuth 2.0 client in the
+          // Google Cloud Console (APIs & Services -> Credentials). Mismatch
+          // here is what produces `Error 400: redirect_uri_mismatch`.
+          redirectUrl: `${origin}/`,
+          postLogoutRedirectUri: `${origin}/login`,
+          clientId: remote?.oidc?.clientId,
+          scope: remote?.oidc?.scope || 'openid profile email',
+          responseType: 'code',
+          silentRenew: !onGoogle,
+          useRefreshToken: !onGoogle,
+          renewTimeBeforeTokenExpiresInSeconds: 60,
+          ignoreNonceAfterRefresh: true,
+          // Authorization Code + PKCE is used for SPAs; no client_secret is
+          // sent from the browser. The OAuth client in the Cloud Console
+          // must be created as a "Web application" client with PKCE enabled
+          // (which is the default for the Google Identity flow). NEVER ship
+          // a client_secret in the SPA bundle - it would be world-readable.
+          customParamsAuthRequest:
+            !onGoogle && remote?.oidc?.audience
+              ? {audience: remote.oidc.audience}
+              : undefined,
+          secureRoutes: ['/api/'],
+          logLevel: LogLevel.Warn,
+          historyCleanupOff: false,
+        } satisfies OpenIdConfiguration;
+      }),
       catchError(() =>
         of<OpenIdConfiguration>({
           authority: '',
@@ -176,6 +193,12 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
           logLevel: LogLevel.Warn,
         }),
       ),
+      // The OIDC library can subscribe to this observable more than once
+      // (e.g. at boot and again when silent renew is initialised). Without
+      // shareReplay each subscription re-fetches /assets/runtime-config.json
+      // which is wasted bandwidth and risks the two subscribers seeing
+      // different responses if the file is rewritten mid-boot.
+      shareReplay({bufferSize: 1, refCount: false}),
     );
 
   return new StsConfigHttpLoader(config$);

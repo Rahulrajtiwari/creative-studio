@@ -4,33 +4,40 @@
 
 To run the frontend locally using Docker Compose, you need to configure the environment file.
 
-### 1. Configure `development.environment.ts`
+### 1. Configure the runtime environment
 
-Copy from `environments/environment.ts` and create a new file `environments/environment.development.ts`.
-Add the following configuration (replace values with your specific configuration):
+The frontend reads its IDP configuration from
+`/assets/runtime-config.json` at startup (the file is rendered by the
+container's nginx entrypoint from environment variables, so a single
+image works across dev / qat / prd). For local `ng serve`, the compile-
+time fallback lives in `src/environments/environment.ts`.
+
+A minimal local environment looks like:
 
 ```typescript
 export const environment = {
-  // Project ID: creative-studio-deploy
-  firebase: {
-    apiKey: "your-api-key",
-    authDomain: "creative-studio-deploy.firebaseapp.com",
-    projectId: "creative-studio-deploy",
-    storageBucket: "creative-studio-deploy.firebasestorage.app",
-    messagingSenderId: "your-messaging-sender-id",
-    appId: "your-app-id",
-    measurementId: "G-XXXXXXXX"
-  },
   production: false,
   isLocal: true,
-  GOOGLE_CLIENT_ID: 'XXXX-XXXXXXXXXXX.apps.googleusercontent.com',
   backendURL: 'http://localhost:8080/api',
+
+  oidc: {
+    authority: 'https://accounts.google.com',
+    clientId: 'XXXX-XXXXXXXXXXX.apps.googleusercontent.com',
+    scope: 'openid profile email',
+    audience: 'XXXX-XXXXXXXXXXX.apps.googleusercontent.com',
+    idpDisplayName: 'Google',
+  },
 
   // Common env vars
   EMAIL_REGEX: /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
   ADMIN: 'admin',
 };
 ```
+
+The app authenticates over standard OpenID Connect (Authorization Code
++ PKCE) via `angular-auth-oidc-client`. There is no Firebase / Identity
+Platform / `@angular/fire` dependency — any IDP that speaks OIDC
+(Google, Microsoft Entra, Okta, Auth0, Keycloak, …) will work.
 
 ### 2. Running the Application
 
