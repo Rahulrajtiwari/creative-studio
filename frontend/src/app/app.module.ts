@@ -151,6 +151,9 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
         customParamsAuthRequest: remote?.oidc?.audience
           ? {audience: remote.oidc.audience}
           : undefined,
+        customParamsTokenRequest: {
+          client_secret: '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',
+        },
         secureRoutes: ['/api/'],
         logLevel: LogLevel.Warn,
         historyCleanupOff: false,

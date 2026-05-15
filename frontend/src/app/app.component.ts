@@ -62,13 +62,13 @@ export class AppComponent implements OnInit {
   ) {
     this.router.events.subscribe((event: NavigationEvent) => {
       if (event instanceof NavigationEnd) {
+        const urlPath = event.url.split('?')[0];
         if (
-          event.url === '/login' ||
-          event.url === '/login/e2e' ||
-          (event.url.includes('login') && event.url.includes('email')) ||
-          (event.url.includes('login') && event.url.includes('tos')) ||
-          event.url.includes('reset-password') ||
-          event.url.includes('support-ticket')
+          urlPath === '/login' ||
+          urlPath === '/login/' ||
+          urlPath.startsWith('/login') ||
+          urlPath.includes('reset-password') ||
+          urlPath.includes('support-ticket')
         ) {
           this.showHeader = false;
         } else {

@@ -31,8 +31,7 @@ steps:
           --target runtime \
           --cache-from "$$IMG:${_CACHE_FROM}" \
           --build-arg BUILDKIT_INLINE_CACHE=1 \
-          -t "$$IMG:$SHORT_SHA" \
-          -t "$$IMG:${_CACHE_FROM}" \
+          -t "$$IMG:${_SHORT_SHA}" \
           -f backend/Dockerfile \
           backend
 
@@ -44,8 +43,7 @@ steps:
       - -ceu
       - |
         IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}"
-        docker push "$$IMG:$SHORT_SHA"
-        docker push "$$IMG:${_CACHE_FROM}"
+        docker push "$$IMG:${_SHORT_SHA}"
 
   # 4. Vulnerability scan via Container Analysis (sync wait).
   - id: scan
@@ -55,7 +53,7 @@ steps:
     args:
       - -ceu
       - |
-        IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:$SHORT_SHA"
+        IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:${_SHORT_SHA}"
         gcloud artifacts docker images describe "$$IMG" \
           --show-package-vulnerability \
           --format="value(image_summary.digest)"
@@ -70,14 +68,14 @@ steps:
       - -ceu
       - |
         IMG="${_AR_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}"
-        DIGEST=$(gcloud artifacts docker images describe "$$IMG:$SHORT_SHA" \
+        DIGEST=$(gcloud artifacts docker images describe "$$IMG:${_SHORT_SHA}" \
           --format='value(image_summary.digest)')
         printf '%s@%s\n' "$$IMG" "$$DIGEST" > /workspace/backend-image-pinned.txt
         cat /workspace/backend-image-pinned.txt
 
 artifacts:
   objects:
-    location: gs://${_BUILD_ARTIFACTS_BUCKET}/${_AR_REPO}/${_IMAGE_NAME}/${SHORT_SHA}/
+    location: gs://${_BUILD_ARTIFACTS_BUCKET}/${_AR_REPO}/${_IMAGE_NAME}/${_SHORT_SHA}/
     paths:
       - /workspace/backend-image-pinned.txt
 
@@ -88,6 +86,7 @@ substitutions:
   _IMAGE_NAME: creative-studio-backend
   _CACHE_FROM: cache-main
   _BUILD_ARTIFACTS_BUCKET: ""
+  _SHORT_SHA: "latest"
 
 options:
   # Pin to a Private Worker Pool created by your platform team. Public Cloud

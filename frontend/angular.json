@@ -35,7 +35,8 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "public",
+                "output": "/"
               },
               {
                 "glob": "**/*",
@@ -81,6 +82,8 @@
                   "with": "src/environments/environment.prod.ts"
                 }
               ],
+              "prerender": false,
+              "ssr": false,
               "optimization": true,
               "outputHashing": "all",
               "sourceMap": false,
@@ -173,7 +176,8 @@
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "public",
+                "output": "/"
               },
               {
                 "glob": "**/*",

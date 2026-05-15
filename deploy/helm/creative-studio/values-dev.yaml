@@ -28,12 +28,10 @@ backend:
   image:
     tag: "creative-studio-backend@sha256:d86453b41a8f877a89f105b7691f0f199721adb08bd33120dd66a220c4791c17"
   config:
-    OIDC_ISSUER: "https://login.example.com/idp"
-    OIDC_AUDIENCES: "creative-studio-dev"
-    OIDC_ALLOWED_EMAIL_DOMAINS: "example.com"
-    OIDC_ALLOWED_GROUPS: "creative-studio-dev-users,creative-studio-admins"
     DB_USER: "cs-be-dev@ravi-argolis-01.iam"
     TRUSTED_HOSTS: "*"
+    OIDC_ISSUER: "https://accounts.google.com"
+    OIDC_AUDIENCES: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
 
 frontend:
   replicaCount: 2
@@ -41,16 +39,21 @@ frontend:
     minReplicas: 2
     maxReplicas: 4
   image:
-    tag: "creative-studio-frontend@sha256:703d00b16f5b9b9fd17327c9a0eae77017a7e40c4ec24d5aa9ab83a8e5837feb"
+    tag: "creative-studio-frontend@sha256:15a99061b9f24da185b8e367aca705d1a675cdf91cb34caf6ae9c66a53f4e312"
   config:
-    OIDC_AUTHORITY: "https://login.example.com/idp"
-    OIDC_CLIENT_ID: "creative-studio-dev"
-    OIDC_AUDIENCE: "creative-studio-dev"
-    OIDC_IDP_DISPLAY_NAME: "Corporate SSO (Dev)"
+    OIDC_AUTHORITY: "https://accounts.google.com"
+    OIDC_CLIENT_ID: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
+    OIDC_AUDIENCE: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
+
 
 migrations:
   image:
     tag: "creative-studio-backend@sha256:d86453b41a8f877a89f105b7691f0f199721adb08bd33120dd66a220c4791c17"
+  command:
+    - "/bin/sh"
+    - "-c"
+  args:
+    - "alembic upgrade head && python3 -c \"import urllib.request; urllib.request.urlopen(urllib.request.Request('http://localhost:9091/quitquitquit', method='POST'))\""
 
 networkPolicies:
   egress:

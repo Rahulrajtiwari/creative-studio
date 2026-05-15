@@ -9,9 +9,9 @@ Release name : {{ .Release.Name }}
 Namespace    : {{ .Release.Namespace }}
 App URL      : https://{{ $host }}
 
-Important checks (run from a host inside the corporate network):
+Important checks:
 
-1. Verify the Internal HTTPS Load Balancer is healthy:
+1. Verify the Global External Load Balancer is healthy:
      kubectl -n {{ .Release.Namespace }} get ingress {{ $name }} -o wide
 
 2. Check Pods are Ready:
@@ -28,5 +28,5 @@ Important checks (run from a host inside the corporate network):
      kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "cs.backend.fullname" . }} -c cloud-sql-proxy -- \
        wget -qO- http://localhost:9090/readiness
 
-NOTE: This application is intentionally only reachable from corporate networks
-(VDI/VPN/Interconnect/secure proxy). External users CANNOT reach it.
+NOTE: This application is exposed via a Global External Load Balancer (GLB) accessible publicly.
+Authorization enforces strict Domain Verification at sign-in; only authorized corporate users are permitted access.
