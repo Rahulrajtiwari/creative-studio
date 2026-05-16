@@ -166,30 +166,69 @@ export class AuthService {
   }
 
   /**
-   * Returns a fresh access token, performing a silent refresh if necessary.
-   * Used by the AuthInterceptor to attach Authorization headers.
+   * Returns a fresh bearer token for backend `/api/*` calls.
+   *
+   * IMPORTANT: we deliberately return the OIDC **id_token** (a JWT), NOT the
+   * OAuth access_token. Reason: Google's access tokens are OPAQUE strings
+   * ("ya29...") that cannot be validated as JWTs. Our backend's
+   * `OIDCVerifier` (backend/src/auth/oidc_verifier.py) uses PyJWT to decode
+   * and validate the bearer (signature, iss, aud, exp). Sending the opaque
+   * access_token would make every `/api/*` call return 401, the interceptor
+   * would attempt a silent refresh that always fails on Google, and the
+   * user would be auto-logged-out within seconds of login.
+   *
+   * The id_token is also a JWT issued by Google with the same signing key,
+   * with `iss=https://accounts.google.com`, `aud=<our clientId>`, and a
+   * 1-hour expiry. It is what `OIDCVerifier` is configured to accept.
+   *
+   * NB: the method name is kept as `getValidAccessToken$` for backward
+   * compatibility with existing callers (AuthInterceptor, tests). The
+   * payload it returns is conceptually a bearer credential for the
+   * application backend, not the OIDC "access_token" per se.
    */
   getValidAccessToken$(): Observable<string> {
     if (!isPlatformBrowser(this.platformId)) {
       return of('');
     }
-    return this.oidc.getAccessToken().pipe(
+    return this.oidc.getIdToken().pipe(
       take(1),
       switchMap(token => {
         if (token) {
-          this.session.accessToken = token;
+          this.session.idToken = token;
           return of(token);
         }
         // Empty token => session expired or never logged in.
         return throwError(
-          () => new Error('No valid access token; user must re-authenticate.'),
+          () =>
+            new Error('No valid ID token; user must re-authenticate.'),
         );
       }),
     );
   }
 
-  /** Force a silent token refresh; used by the interceptor on 401s. */
+  /**
+   * Attempt a silent token refresh; used by the interceptor on 401s.
+   *
+   * For Google ("Web application" OAuth client type) silent renewal is
+   * IMPOSSIBLE in this SPA: the PKCE flow does not issue a refresh_token,
+   * and iframe-based renewal is blocked by Google's `X-Frame-Options`. If
+   * we let angular-auth-oidc-client try anyway it loops through 3 internal
+   * timeout retries (~30 seconds of dead time) before failing - that's
+   * 30 seconds of an unresponsive UI before the user is finally redirected
+   * to /login. We short-circuit that here: when the configured authority
+   * is Google, fail fast.
+   */
   forceRefresh$(): Observable<string> {
+    const authority = this.runtimeConfig.config.oidc?.authority || '';
+    const isGoogle = /(^https:\/\/)?accounts\.google\.com\/?$/.test(authority);
+    if (isGoogle) {
+      return throwError(
+        () =>
+          new Error(
+            'Silent renewal is not supported for the Google IdP; user must re-authenticate.',
+          ),
+      );
+    }
     return this.oidc.forceRefreshSession().pipe(
       switchMap(({accessToken}) => {
         if (!accessToken) {

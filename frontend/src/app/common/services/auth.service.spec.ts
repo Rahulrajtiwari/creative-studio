@@ -32,36 +32,12 @@ describe('AuthService (OIDC)', () => {
   let userServiceSpy: jasmine.SpyObj<UserService>;
   let runtime: Partial<RuntimeConfigService>;
 
-  beforeEach(() => {
-    oidcSpy = jasmine.createSpyObj<OidcSecurityService>('OidcSecurityService', [
-      'authorize',
-      'logoff',
-      'checkAuth',
-      'getAccessToken',
-      'forceRefreshSession',
-    ]);
-    oidcSpy.checkAuth.and.returnValue(
-      of({
-        isAuthenticated: true,
-        userData: {},
-        accessToken: 'access-token',
-        idToken: 'id-token',
-        configId: 'main',
-        errorMessage: '',
-      } as any),
-    );
-    oidcSpy.getAccessToken.and.returnValue(of('access-token'));
-    oidcSpy.logoff.and.returnValue(of(null));
-
-    userServiceSpy = jasmine.createSpyObj<UserService>('UserService', [
-      'getUserDetails',
-    ]);
-
+  function configureModule(authority: string = 'https://idp.example.com'): void {
     runtime = {
       config: {
         backendURL: '/api',
         oidc: {
-          authority: 'https://idp.example.com',
+          authority,
           clientId: 'client',
           scope: 'openid profile email',
           audience: 'api',
@@ -79,6 +55,36 @@ describe('AuthService (OIDC)', () => {
         {provide: RuntimeConfigService, useValue: runtime},
       ],
     });
+  }
+
+  beforeEach(() => {
+    oidcSpy = jasmine.createSpyObj<OidcSecurityService>('OidcSecurityService', [
+      'authorize',
+      'logoff',
+      'checkAuth',
+      'getAccessToken',
+      'getIdToken',
+      'forceRefreshSession',
+    ]);
+    oidcSpy.checkAuth.and.returnValue(
+      of({
+        isAuthenticated: true,
+        userData: {},
+        accessToken: 'access-token',
+        idToken: 'id-token',
+        configId: 'main',
+        errorMessage: '',
+      } as any),
+    );
+    oidcSpy.getAccessToken.and.returnValue(of('access-token'));
+    oidcSpy.getIdToken.and.returnValue(of('id-token'));
+    oidcSpy.logoff.and.returnValue(of(null));
+
+    userServiceSpy = jasmine.createSpyObj<UserService>('UserService', [
+      'getUserDetails',
+    ]);
+
+    configureModule();
   });
 
   it('login() delegates to OidcSecurityService.authorize()', () => {
@@ -95,10 +101,71 @@ describe('AuthService (OIDC)', () => {
     expect(localStorage.getItem('USER_DETAILS')).toBeNull();
   });
 
-  it('getValidAccessToken$ resolves to the OIDC access token', done => {
+  // Regression: previously this resolved to the OAuth access_token
+  // ("ya29..." for Google). The backend's OIDCVerifier (PyJWT) cannot
+  // decode opaque access tokens; every /api/* call returned 401, the
+  // interceptor tried silent refresh, refresh failed (Google doesn't
+  // support iframe renewal), and the user was kicked back to /login
+  // seconds after a successful sign-in. The method must now resolve to
+  // the OIDC id_token (a JWT) which the backend can validate.
+  it('getValidAccessToken$ resolves to the OIDC id_token (JWT), not the access_token', done => {
     const svc = TestBed.inject(AuthService);
     svc.getValidAccessToken$().subscribe(token => {
-      expect(token).toBe('access-token');
+      expect(token).toBe('id-token');
+      expect(oidcSpy.getIdToken).toHaveBeenCalled();
+      expect(oidcSpy.getAccessToken).not.toHaveBeenCalled();
+      done();
+    });
+  });
+
+  it('getValidAccessToken$ errors if no id_token is available', done => {
+    oidcSpy.getIdToken.and.returnValue(of(''));
+    const svc = TestBed.inject(AuthService);
+    svc.getValidAccessToken$().subscribe({
+      next: () => done.fail('should not have emitted a token'),
+      error: err => {
+        expect(err.message).toContain('No valid ID token');
+        done();
+      },
+    });
+  });
+
+  // Regression: forceRefresh$ used to delegate unconditionally to
+  // OidcSecurityService.forceRefreshSession(). For the Google IdP that
+  // call is impossible to satisfy (the PKCE SPA flow issues no
+  // refresh_token, iframe-based renewal is blocked by X-Frame-Options),
+  // so the library would burn ~30s through three internal timeout
+  // retries before failing - 30s during which the user's UI was
+  // unresponsive. We must short-circuit for Google.
+  it('forceRefresh$ fails fast for the Google authority without calling forceRefreshSession', done => {
+    TestBed.resetTestingModule();
+    configureModule('https://accounts.google.com');
+    const svc = TestBed.inject(AuthService);
+    svc.forceRefresh$().subscribe({
+      next: () => done.fail('should not have emitted a token'),
+      error: err => {
+        expect(err.message).toContain('not supported for the Google IdP');
+        expect(oidcSpy.forceRefreshSession).not.toHaveBeenCalled();
+        done();
+      },
+    });
+  });
+
+  it('forceRefresh$ still delegates to forceRefreshSession for non-Google IdPs', done => {
+    oidcSpy.forceRefreshSession.and.returnValue(
+      of({
+        isAuthenticated: true,
+        userData: {},
+        accessToken: 'refreshed-access-token',
+        idToken: 'refreshed-id-token',
+        configId: 'main',
+        errorMessage: '',
+      } as any),
+    );
+    const svc = TestBed.inject(AuthService);
+    svc.forceRefresh$().subscribe(token => {
+      expect(token).toBe('refreshed-access-token');
+      expect(oidcSpy.forceRefreshSession).toHaveBeenCalled();
       done();
     });
   });
