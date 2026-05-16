@@ -19,9 +19,10 @@ import {
   HttpTestingController,
 } from '@angular/common/http/testing';
 import {TestBed} from '@angular/core/testing';
+import {Router} from '@angular/router';
 import {RouterTestingModule} from '@angular/router/testing';
 import {OidcSecurityService} from 'angular-auth-oidc-client';
-import {of} from 'rxjs';
+import {of, throwError} from 'rxjs';
 
 import {AuthService} from './auth.service';
 import {RuntimeConfigService} from '../../runtime-config.service';
@@ -31,6 +32,7 @@ describe('AuthService (OIDC)', () => {
   let oidcSpy: jasmine.SpyObj<OidcSecurityService>;
   let userServiceSpy: jasmine.SpyObj<UserService>;
   let runtime: Partial<RuntimeConfigService>;
+  let routerSpy: jasmine.SpyObj<Router>;
 
   function configureModule(authority: string = 'https://idp.example.com'): void {
     runtime = {
@@ -53,6 +55,7 @@ describe('AuthService (OIDC)', () => {
         {provide: OidcSecurityService, useValue: oidcSpy},
         {provide: UserService, useValue: userServiceSpy},
         {provide: RuntimeConfigService, useValue: runtime},
+        {provide: Router, useValue: routerSpy},
       ],
     });
   }
@@ -84,6 +87,9 @@ describe('AuthService (OIDC)', () => {
       'getUserDetails',
     ]);
 
+    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    routerSpy.navigate.and.resolveTo(true);
+
     configureModule();
   });
 
@@ -99,6 +105,86 @@ describe('AuthService (OIDC)', () => {
     svc.logout();
     expect(oidcSpy.logoff).toHaveBeenCalled();
     expect(localStorage.getItem('USER_DETAILS')).toBeNull();
+  });
+
+  // Regression: previously logout() only routed to /login from the `error`
+  // handler of oidc.logoff().subscribe(). Google does NOT implement the
+  // OIDC end_session_endpoint, so for Google logoff() succeeds locally
+  // with no redirect - the `next` callback fires, the `error` handler
+  // does NOT, and we never navigated. The logout button looked
+  // completely dead from the user's perspective. We must navigate to
+  // /login on EVERY termination path.
+  it('logout() navigates to /login on successful oidc.logoff()', done => {
+    const svc = TestBed.inject(AuthService);
+    svc.logout();
+    // finalize() is microtask-scheduled by RxJS; wait one tick.
+    setTimeout(() => {
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
+      done();
+    }, 0);
+  });
+
+  it('logout() navigates to /login even when oidc.logoff() errors', done => {
+    oidcSpy.logoff.and.returnValue(throwError(() => new Error('boom')));
+    const svc = TestBed.inject(AuthService);
+    svc.logout();
+    setTimeout(() => {
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
+      done();
+    }, 0);
+  });
+
+  // Defense-in-depth: for the Google authority, the access token still
+  // grants API access for ~1h after a "logout" unless we explicitly tell
+  // Google to revoke it. Without revocation, clicking "Login" again would
+  // silently re-sign the user in (Google's cookie session is still alive).
+  // logout() must POST the access_token to
+  // https://oauth2.googleapis.com/revoke on the way out.
+  it('logout() revokes the access token at Google for the Google authority', () => {
+    TestBed.resetTestingModule();
+    configureModule('https://accounts.google.com');
+    const svc = TestBed.inject(AuthService);
+    const httpMock = TestBed.inject(HttpTestingController);
+
+    // Prime an access token onto the session by running initialize() and
+    // flushing the resulting /users/me sync.
+    svc.initialize().subscribe();
+    httpMock
+      .match(r => r.url.endsWith('/users/me'))
+      .forEach(r =>
+        r.flush({name: 'X', email: 'x@example.com', picture: '', roles: []}),
+      );
+
+    svc.logout();
+
+    const revokeReq = httpMock.expectOne(
+      'https://oauth2.googleapis.com/revoke',
+    );
+    expect(revokeReq.request.method).toBe('POST');
+    expect(revokeReq.request.body).toContain('token=access-token');
+    expect(revokeReq.request.headers.get('Content-Type')).toBe(
+      'application/x-www-form-urlencoded',
+    );
+    revokeReq.flush({});
+  });
+
+  it('logout() does NOT call Google revocation for a non-Google authority', () => {
+    const svc = TestBed.inject(AuthService);
+    const httpMock = TestBed.inject(HttpTestingController);
+
+    svc.initialize().subscribe();
+    httpMock
+      .match(r => r.url.endsWith('/users/me'))
+      .forEach(r =>
+        r.flush({name: 'X', email: 'x@example.com', picture: '', roles: []}),
+      );
+
+    svc.logout();
+
+    const revokeAttempts = httpMock.match(
+      'https://oauth2.googleapis.com/revoke',
+    );
+    expect(revokeAttempts.length).toBe(0);
   });
 
   // Regression: previously this resolved to the OAuth access_token

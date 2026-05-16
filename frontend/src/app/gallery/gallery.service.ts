@@ -63,7 +63,19 @@ export class GalleryService implements OnDestroy {
       .pipe(
         debounceTime(50),
         switchMap(([workspaceId, filters]) => {
-          if (!filters) {
+          // RACE-CONDITION GUARD: `activeWorkspaceId$` is a BehaviorSubject
+          // seeded with `null`. On gallery page mount, `setFilters()` fires
+          // synchronously from ngOnInit() while `GET /api/workspaces` is
+          // still in flight, so combineLatest emits `[null, filters]` and
+          // the previous guard (only `!filters`) let the search go out
+          // with `workspaceId: undefined`. The backend's
+          // gallery_controller enforces `workspace_id` for every
+          // non-admin caller and returns `400 "workspace_id is required
+          // for non-admin users."`, which then triggered the catchError
+          // below and froze the gallery UI in a glitched loading state.
+          // Wait for the workspace switcher to publish an id before
+          // firing any search.
+          if (!filters || !workspaceId) {
             return of(null);
           }
           this.isLoading$.next(true);
@@ -71,7 +83,7 @@ export class GalleryService implements OnDestroy {
 
           const body: GallerySearchDto = {
             ...filters,
-            workspaceId: workspaceId || undefined,
+            workspaceId,
           };
 
           return this.fetchImages(body).pipe(
@@ -120,10 +132,20 @@ export class GalleryService implements OnDestroy {
       return;
     }
 
+    // Same race-condition guard as the reactive pipeline above: never
+    // issue /gallery/search without a workspaceId, otherwise the backend
+    // 400s and the gallery UI is left in a half-loaded state. If the
+    // workspace switcher hasn't published an id yet (or has been cleared),
+    // skip this pagination tick - the reactive pipeline will reload the
+    // gallery automatically once activeWorkspaceId$ emits.
+    const workspaceId = this.workspaceStateService.getActiveWorkspaceId();
+    if (!workspaceId) {
+      return;
+    }
+
     const body: GallerySearchDto = {
       ...this.filters$.value,
-      workspaceId:
-        this.workspaceStateService.getActiveWorkspaceId() || undefined,
+      workspaceId,
       offset: this.currentPage * this.pageSize,
       limit: this.pageSize,
     };

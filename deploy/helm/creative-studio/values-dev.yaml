@@ -36,6 +36,13 @@ backend:
     # lives under externalSecrets.fallbackSecretData.OIDC_CLIENT_SECRET
     # (dev) or in GCP Secret Manager (production - see values.yaml).
     OIDC_CLIENT_ID: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
+    # First user the bootstrap script will mark as the owner of the seeded
+    # public workspace (and the owner of system-level VTO assets and media
+    # templates). Must be an email of a real user who will sign in to the
+    # app; if the user already exists in the DB the bootstrap just looks
+    # them up - it does NOT auto-promote them to ADMIN role. Leave as the
+    # default `"system"` to skip admin/public-workspace bootstrapping.
+    ADMIN_USER_EMAIL: "user1@ravitiwary.altostrat.com"
 
 # -----------------------------------------------------------------------------
 # Backend secrets — sourced from GCP Secret Manager via External Secrets
@@ -71,13 +78,22 @@ frontend:
 
 
 migrations:
+  # Bumped Job deadline to give bootstrap.py time to upload VTO assets and
+  # media-template assets to GCS the first time (subsequent runs are fast
+  # because every step is idempotent).
+  activeDeadlineSeconds: 1800
   image:
     tag: "creative-studio-backend@sha256:9f302d4fb52a3ef39e39e82dddf774e190d7ae5a0be73bac79034a9bac1cb7a3"
   command:
     - "/bin/sh"
     - "-c"
+  # Pipeline: 1) alembic migrations -> 2) bootstrap (admin user lookup,
+  # public workspace, system VTO assets, media templates) -> 3) tell the
+  # cloud-sql-proxy sidecar to quitquitquit so the Job pod can terminate.
+  # All bootstrap steps are idempotent (existence checks before insert), so
+  # this is safe to re-run on every helm upgrade.
   args:
-    - "alembic upgrade head && python3 -c \"import urllib.request; urllib.request.urlopen(urllib.request.Request('http://localhost:9091/quitquitquit', method='POST'))\""
+    - "alembic upgrade head && python -m bootstrap.bootstrap && python3 -c \"import urllib.request; urllib.request.urlopen(urllib.request.Request('http://localhost:9091/quitquitquit', method='POST'))\""
 
 networkPolicies:
   egress:
