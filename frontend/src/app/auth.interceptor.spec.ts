@@ -130,4 +130,30 @@ describe('AuthInterceptor', () => {
     expect(authSpy.getValidAccessToken$).not.toHaveBeenCalled();
     req.flush({access_token: 'tok'});
   });
+
+  // Regression: AuthService.syncUserWithBackend$() is invoked from *inside*
+  // the initialize() pipeline (post-login /users/me sync) and pre-attaches
+  // its own Authorization header. If the interceptor gated that request on
+  // initialize() it would deadlock: the inner http.get() would await an
+  // emission from the very Observable that is already executing inside of,
+  // and shareReplay would never resolve. The user would see a blank page
+  // after login with no /users/me network entry and no further OIDC logs
+  // beyond "checkAuth completed. isAuthenticated: true". The interceptor
+  // must forward any request that already carries an Authorization header
+  // without touching the auth chain.
+  it('forwards requests that already carry an Authorization header without consulting initialize()', () => {
+    configure(true, 'tok');
+    http
+      .get('/api/users/me', {
+        headers: {Authorization: 'Bearer pre-attached-id-token'},
+      })
+      .subscribe();
+    const req = httpMock.expectOne('/api/users/me');
+    expect(req.request.headers.get('Authorization')).toBe(
+      'Bearer pre-attached-id-token',
+    );
+    expect(authSpy.initialize).not.toHaveBeenCalled();
+    expect(authSpy.getValidAccessToken$).not.toHaveBeenCalled();
+    req.flush({});
+  });
 });

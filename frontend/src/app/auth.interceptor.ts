@@ -41,6 +41,24 @@ export class AuthInterceptor implements HttpInterceptor {
       return next.handle(request);
     }
 
+    // CRITICAL: if the caller already provided an Authorization header,
+    // forward the request as-is and SKIP the initialize() gate entirely.
+    //
+    // This avoids a deadlock when AuthService.syncUserWithBackend$() is
+    // invoked from inside the initialize() pipeline itself (the post-login
+    // /users/me sync). In that case:
+    //   initialize() --switchMap--> syncUserWithBackend$ --http.get--> here
+    // If we then re-entered `this.authService.initialize().pipe(take(1)…)`,
+    // we would be waiting for an emission from the very Observable we are
+    // already executing inside of — with shareReplay this never resolves and
+    // the SPA hangs on a blank page post-login (router navigation never
+    // completes because the AuthGuard's initialize() emission is also stuck
+    // behind the same wait). The caller has already attached a valid Bearer
+    // token, so there is nothing for us to add.
+    if (request.headers.has('Authorization')) {
+      return next.handle(request);
+    }
+
     // 1) Wait for the OIDC checkAuth() round trip to settle. Without this,
     //    any HTTP call fired while the app is still processing the
     //    `?code=...` callback (e.g. the workspace-switcher's load-on-init
