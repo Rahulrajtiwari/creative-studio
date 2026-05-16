@@ -88,8 +88,8 @@
         <div class="video-container">
           <video
             class="w-full rounded-xl"
-            oncanplay="this.play()"
-            onloadedmetadata="this.muted = true"
+            (loadedmetadata)="$any($event.target).muted = true"
+            (canplay)="$any($event.target).play()"
             muted
             playsinline
             loop

@@ -205,8 +205,8 @@
                     [style.opacity]="
                       (currentImageIndices[template.id] || 0) === i ? 1 : 0
                     "
-                    oncanplay="this.play()"
-                    onloadedmetadata="this.muted = true"
+                    (loadedmetadata)="$any($event.target).muted = true"
+                    (canplay)="$any($event.target).play()"
                     muted
                     playsinline
                     loop
@@ -262,8 +262,8 @@
                       [style.opacity]="
                         (currentImageIndices[template.id] || 0) === i ? 1 : 0
                       "
-                      oncanplay="this.play()"
-                      onloadedmetadata="this.muted = true"
+                      (loadedmetadata)="$any($event.target).muted = true"
+                      (canplay)="$any($event.target).play()"
                       muted
                       playsinline
                       loop

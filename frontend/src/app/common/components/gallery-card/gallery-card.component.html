@@ -54,8 +54,8 @@
           class="media-element"
           [class.active]="currentImageIndex === i"
           [class.inactive]="currentImageIndex !== i"
-          oncanplay="this.play()"
-          onloadedmetadata="this.muted = true"
+          (loadedmetadata)="$any($event.target).muted = true"
+          (canplay)="$any($event.target).play()"
           muted
           playsinline
           loop

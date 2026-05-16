@@ -190,7 +190,13 @@ function oidcConfigLoaderFactory(http: HttpClient): StsConfigLoader {
               ? {audience: remote.oidc.audience}
               : undefined,
           secureRoutes: ['/api/'],
-          logLevel: LogLevel.Warn,
+          // TODO(diagnostic): bump back to LogLevel.Warn once the post-login
+          // blank-page issue is fully understood. While the OIDC token
+          // exchange succeeds (POST /api/auth/token → 200) but the SPA still
+          // renders blank, we keep Debug on so the angular-auth-oidc-client
+          // library logs every step of id_token validation and session setup
+          // into the browser console for diagnosis.
+          logLevel: LogLevel.Debug,
           historyCleanupOff: false,
         } satisfies OpenIdConfiguration;
       }),
