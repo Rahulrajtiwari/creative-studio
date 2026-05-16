@@ -26,7 +26,7 @@ backend:
     minReplicas: 2
     maxReplicas: 6
   image:
-    tag: "creative-studio-backend@sha256:d86453b41a8f877a89f105b7691f0f199721adb08bd33120dd66a220c4791c17"
+    tag: "creative-studio-backend@sha256:9f302d4fb52a3ef39e39e82dddf774e190d7ae5a0be73bac79034a9bac1cb7a3"
   config:
     DB_USER: "cs-be-dev@ravi-argolis-01.iam"
     TRUSTED_HOSTS: "*"
@@ -63,7 +63,7 @@ frontend:
     minReplicas: 2
     maxReplicas: 4
   image:
-    tag: "creative-studio-frontend@sha256:15a99061b9f24da185b8e367aca705d1a675cdf91cb34caf6ae9c66a53f4e312"
+    tag: "creative-studio-frontend@sha256:0d3f7bbb26ff584162034d518067cd2544e15bd4137d928d60be271789af37f2"
   config:
     OIDC_AUTHORITY: "https://accounts.google.com"
     OIDC_CLIENT_ID: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
@@ -72,7 +72,7 @@ frontend:
 
 migrations:
   image:
-    tag: "creative-studio-backend@sha256:d86453b41a8f877a89f105b7691f0f199721adb08bd33120dd66a220c4791c17"
+    tag: "creative-studio-backend@sha256:9f302d4fb52a3ef39e39e82dddf774e190d7ae5a0be73bac79034a9bac1cb7a3"
   command:
     - "/bin/sh"
     - "-c"
