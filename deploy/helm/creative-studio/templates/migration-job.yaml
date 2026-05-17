@@ -10,7 +10,12 @@ metadata:
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "0"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    # Keep the Job (and its Pod) around after a successful run so the
+    # bootstrap output can be inspected with `kubectl logs job/<name>`.
+    # The Job is still GC'd by `ttlSecondsAfterFinished` (default 1h) and
+    # the next helm upgrade replaces it via `before-hook-creation`. Failed
+    # Jobs are also retained for debugging.
+    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   backoffLimit: {{ .Values.migrations.backoffLimit }}
   activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
