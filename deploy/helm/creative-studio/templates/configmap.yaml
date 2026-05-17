@@ -7,32 +7,33 @@ metadata:
     {{- include "cs.labels" . | nindent 4 }}
     app.kubernetes.io/component: backend
 data:
+  # ---------------------------------------------------------------------------
+  # Computed / aliased keys. These have to be listed explicitly because their
+  # values either come from a helper template (project id, hostnames…) or
+  # from a different .Values path (.Values.global.environment, not
+  # .Values.backend.config.ENVIRONMENT).
+  # ---------------------------------------------------------------------------
   PROJECT_ID: {{ include "cs.effective.projectId" . | quote }}
   LOCATION: {{ include "cs.effective.location" . | quote }}
   ENVIRONMENT: {{ .Values.global.environment | quote }}
-  LOG_LEVEL: {{ .Values.backend.config.LOG_LEVEL | quote }}
-  BEHIND_INGRESS: {{ .Values.backend.config.BEHIND_INGRESS | quote }}
   TRUSTED_HOSTS: {{ include "cs.effective.trustedHosts" . | quote }}
   FRONTEND_URL: {{ include "cs.effective.frontendUrl" . | quote }}
-
-  GENMEDIA_BUCKET: {{ .Values.backend.config.GENMEDIA_BUCKET | quote }}
-  VIDEO_BUCKET: {{ .Values.backend.config.VIDEO_BUCKET | quote }}
-  IMAGE_BUCKET: {{ .Values.backend.config.IMAGE_BUCKET | quote }}
-
-  OIDC_ISSUER: {{ .Values.backend.config.OIDC_ISSUER | quote }}
-  OIDC_AUDIENCES: {{ .Values.backend.config.OIDC_AUDIENCES | quote }}
-  OIDC_ALLOWED_EMAIL_DOMAINS: {{ .Values.backend.config.OIDC_ALLOWED_EMAIL_DOMAINS | quote }}
-  OIDC_ALLOWED_GROUPS_CLAIM: {{ .Values.backend.config.OIDC_ALLOWED_GROUPS_CLAIM | quote }}
-  OIDC_ALLOWED_GROUPS: {{ .Values.backend.config.OIDC_ALLOWED_GROUPS | quote }}
-  OIDC_AUTHORIZED_PARTY: {{ .Values.backend.config.OIDC_AUTHORIZED_PARTY | quote }}
-  OIDC_REQUIRE_EMAIL_VERIFIED: {{ .Values.backend.config.OIDC_REQUIRE_EMAIL_VERIFIED | quote }}
-  JWKS_CACHE_TTL_SEC: {{ .Values.backend.config.JWKS_CACHE_TTL_SEC | quote }}
-
-  USE_CLOUD_SQL_AUTH_PROXY: {{ .Values.backend.config.USE_CLOUD_SQL_AUTH_PROXY | quote }}
-  DB_HOST: {{ .Values.backend.config.DB_HOST | quote }}
-  DB_PORT: {{ .Values.backend.config.DB_PORT | quote }}
-  DB_NAME: {{ .Values.backend.config.DB_NAME | quote }}
-  DB_USER: {{ .Values.backend.config.DB_USER | quote }}
+  # ---------------------------------------------------------------------------
+  # Pass-through of every other key under `.Values.backend.config`. Anything
+  # added to values{,-{env}}.yaml lands here automatically. This avoids the
+  # silent-skip class of bugs where a new config key is added to values
+  # files but never reaches the pod because the chart was never updated.
+  #
+  # Keys already set above are skipped so we don't double-emit them. We
+  # also skip empty strings so optional fields fall back to the ConfigService
+  # defaults rather than masking them with "".
+  # ---------------------------------------------------------------------------
+  {{- $explicit := list "PROJECT_ID" "LOCATION" "ENVIRONMENT" "TRUSTED_HOSTS" "FRONTEND_URL" }}
+  {{- range $k, $v := .Values.backend.config }}
+  {{- if and (not (has $k $explicit)) (ne (toString $v) "") }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap

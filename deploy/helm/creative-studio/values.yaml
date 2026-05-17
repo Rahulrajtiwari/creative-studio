@@ -97,6 +97,15 @@ backend:
     DB_USER: ""                 # REQUIRED (the IAM-mapped GSA short name)
     DB_PASS: ""                 # empty when USE_CLOUD_SQL_AUTH_PROXY=true + IAM auth
     TRUSTED_HOSTS: ""           # comma-separated; defaults to global.appHost via _helpers
+    # Email of the user that bootstrap.py should look up (and create as
+    # ADMIN if they don't yet exist) when the migrations Job runs. This user
+    # becomes the owner of the seeded public workspace, system-level VTO
+    # assets, and media templates. Leave as "system" to skip the
+    # admin / public-workspace / template seeding step entirely.
+    ADMIN_USER_EMAIL: "system"
+    # Sender address used by the outbound email service (workspace
+    # invites). Optional; if unset emails are not sent.
+    SENDER_EMAIL: ""
 
   # Liveness/readiness probes.
   probes:
