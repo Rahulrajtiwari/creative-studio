@@ -30,6 +30,16 @@ backend:
   config:
     DB_USER: "cs-be-dev@ravi-argolis-01.iam"
     TRUSTED_HOSTS: "*"
+    # Vertex AI region for all generative-model calls (Gemini, Imagen,
+    # Veo, Lyria). Override here because preview image models such as
+    # `gemini-3.1-flash-image-preview` (Nano Banana 2) and
+    # `gemini-3-pro-image-preview` are currently deployed only to
+    # `us-central1`; calling them via `asia-south1` returns 404 NOT_FOUND.
+    # Cloud SQL, GCS buckets, GKE nodes etc. continue to live in the
+    # region from `global.region` (asia-south1) - only model RPCs are
+    # cross-region. Once Google rolls these models out to asia-south1,
+    # this override can be removed.
+    LOCATION: "us-central1"
     OIDC_ISSUER: "https://accounts.google.com"
     OIDC_AUDIENCES: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
     # OIDC_CLIENT_ID is the public OAuth client ID. The matching secret
