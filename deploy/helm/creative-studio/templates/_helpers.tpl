@@ -95,20 +95,40 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/* image refs */}}
+{{/*
+Build a fully qualified container image reference from a registry, repository
+and tag/digest. Accepts any of:
+  tag: "1.2.3"                                  -> registry/repo:1.2.3
+  tag: "@sha256:abc..."                         -> registry/repo@sha256:abc...
+  tag: "sha256:abc..."                          -> registry/repo@sha256:abc...
+  tag: "<repo>@sha256:abc..."  (legacy form)    -> registry/repo@sha256:abc...
+The legacy "<repo>@sha256:..." form is tolerated because previous values
+files were authored that way (the repo prefix in the tag is silently
+stripped). New values files should use the bare "@sha256:..." form.
+*/}}
+{{- define "cs.image.ref" -}}
+{{- $reg := required "image.registry is required" .registry -}}
+{{- $repo := required "image.repository is required" .repository -}}
+{{- $tag := required "image.tag is required" .tag -}}
+{{- if contains "@sha256:" $tag -}}
+  {{- /* Strip anything before the @sha256: part, leave only the digest */ -}}
+  {{- $digest := printf "@sha256:%s" (index (splitList "@sha256:" $tag) 1) -}}
+  {{- printf "%s/%s%s" $reg $repo $digest -}}
+{{- else if hasPrefix "sha256:" $tag -}}
+  {{- printf "%s/%s@%s" $reg $repo $tag -}}
+{{- else -}}
+  {{- printf "%s/%s:%s" $reg $repo $tag -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "cs.backend.image" -}}
-{{- $reg := required "image.registry is required" .Values.image.registry -}}
-{{- $tag := required "backend.image.tag is required" .Values.backend.image.tag -}}
-{{- printf "%s/%s:%s" $reg .Values.backend.image.repository $tag -}}
+{{- include "cs.image.ref" (dict "registry" .Values.image.registry "repository" .Values.backend.image.repository "tag" .Values.backend.image.tag) -}}
 {{- end -}}
 
 {{- define "cs.frontend.image" -}}
-{{- $reg := required "image.registry is required" .Values.image.registry -}}
-{{- $tag := required "frontend.image.tag is required" .Values.frontend.image.tag -}}
-{{- printf "%s/%s:%s" $reg .Values.frontend.image.repository $tag -}}
+{{- include "cs.image.ref" (dict "registry" .Values.image.registry "repository" .Values.frontend.image.repository "tag" .Values.frontend.image.tag) -}}
 {{- end -}}
 
 {{- define "cs.migrations.image" -}}
-{{- $reg := required "image.registry is required" .Values.image.registry -}}
-{{- $tag := required "migrations.image.tag is required" .Values.migrations.image.tag -}}
-{{- printf "%s/%s:%s" $reg .Values.migrations.image.repository $tag -}}
+{{- include "cs.image.ref" (dict "registry" .Values.image.registry "repository" .Values.migrations.image.repository "tag" .Values.migrations.image.tag) -}}
 {{- end -}}

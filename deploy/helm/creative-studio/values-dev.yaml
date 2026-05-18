@@ -26,7 +26,7 @@ backend:
     minReplicas: 2
     maxReplicas: 6
   image:
-    tag: "creative-studio-backend@sha256:9f302d4fb52a3ef39e39e82dddf774e190d7ae5a0be73bac79034a9bac1cb7a3"
+    tag: "creative-studio-backend@sha256:98fd3c19d3f579adaf3e42277f005a344d3ad695080858b68b0e19b1fd15cabe"
   config:
     DB_USER: "cs-be-dev@ravi-argolis-01.iam"
     TRUSTED_HOSTS: "*"
@@ -53,6 +53,9 @@ backend:
     # them up - it does NOT auto-promote them to ADMIN role. Leave as the
     # default `"system"` to skip admin/public-workspace bootstrapping.
     ADMIN_USER_EMAIL: "user1@ravitiwary.altostrat.com"
+    # SIGNING_SA_EMAIL is set by Terraform (platform-gke/outputs.tf) to the
+    # backend GSA. Override here only if you need a dedicated signer SA
+    # different from the backend's runtime SA.
 
 # -----------------------------------------------------------------------------
 # Backend secrets — sourced from GCP Secret Manager via External Secrets
@@ -80,7 +83,7 @@ frontend:
     minReplicas: 2
     maxReplicas: 4
   image:
-    tag: "creative-studio-frontend@sha256:0d3f7bbb26ff584162034d518067cd2544e15bd4137d928d60be271789af37f2"
+    tag: "creative-studio-frontend@sha256:f467164bb1b82b9875eccf9f3c42eb79569d175ca2f1c8ad863457a5638b1894"
   config:
     OIDC_AUTHORITY: "https://accounts.google.com"
     OIDC_CLIENT_ID: "791654394327-4qi2bkf4k2k7ikmb3n68gh3as7nise3u.apps.googleusercontent.com"
@@ -93,7 +96,7 @@ migrations:
   # because every step is idempotent).
   activeDeadlineSeconds: 1800
   image:
-    tag: "creative-studio-backend@sha256:9f302d4fb52a3ef39e39e82dddf774e190d7ae5a0be73bac79034a9bac1cb7a3"
+    tag: "creative-studio-backend@sha256:98fd3c19d3f579adaf3e42277f005a344d3ad695080858b68b0e19b1fd15cabe"
   command:
     - "/bin/sh"
     - "-c"

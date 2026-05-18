@@ -137,6 +137,20 @@ output "helm_values" {
         JWKS_CACHE_TTL_SEC          = tostring(var.app.oidc.jwks_cache_ttl_seconds)
         BEHIND_INGRESS              = "true"
         TRUSTED_HOSTS               = var.app.fqdn
+
+        # Service account used by IamSignerCredentials to mint v4-signed
+        # download URLs for GCS objects returned by /api/gallery/* and
+        # other media endpoints. Without it set, the signer silently
+        # returns raw `gs://` URIs which browsers can't render. We reuse
+        # the backend GSA (self-impersonation) because it already has:
+        #   - `roles/iam.serviceAccountTokenCreator` at the project level
+        #     (granted in platform-gke/main.tf:215-219) which permits the
+        #     backend to call iamcredentials.sign_blob on itself.
+        #   - `roles/storage.objectAdmin` on the bucket (granted via
+        #     module.gcs.object_admin_members in this file) which covers
+        #     the storage.objects.get permission that v4 signing requires.
+        # No additional IAM bindings are needed.
+        SIGNING_SA_EMAIL = google_service_account.placeholder_for_iam_user.email
       }
     }
 
