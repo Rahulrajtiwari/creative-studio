@@ -97,7 +97,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   // This object holds the current state of all user selections.
   searchRequest: ImagenRequest = {
     prompt: '',
-    generationModel: 'gemini-3.1-flash-image-preview',
+    generationModel: 'gemini-2.5-flash-image',
     aspectRatio: '1:1',
     numberOfMedia: 4,
     style: null,
@@ -870,7 +870,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   resetAllFilters() {
     this.searchRequest = {
       prompt: '',
-      generationModel: 'gemini-3.1-flash-image-preview',
+      generationModel: 'gemini-2.5-flash-image',
       aspectRatio: '1:1',
       numberOfMedia: 4,
       style: null,
@@ -906,7 +906,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     if (!supportsIngredients) {
       const nanoBanana2 = this.generationModels.find(
-        m => m.value === 'gemini-3.1-flash-image-preview',
+        m => m.value === 'gemini-2.5-flash-image',
       );
       if (nanoBanana2) {
         this.selectModel(nanoBanana2);

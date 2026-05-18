@@ -5,13 +5,15 @@
 # Infrastructure-derived values (project ID, region, GSA emails, Cloud SQL
 # instance connection name, DB user, ingress cert/IP, externalSecrets data
 # mapping, Cloud SQL PSA CIDR, etc.) MUST come from the Terraform output:
-#
 #   cd infra/environments/dev
-#   terraform output -json helm_values | jq '.' > /tmp/values-from-tf.json
+#   terraform apply -var-file=dev.tfvars
+#
+#   # Terraform will automatically generate the required values file here:
+#   # infra/environments/dev/generated/values-from-tf.yaml
 #
 #   helm upgrade --install creative-studio ../deploy/helm/creative-studio \
 #     -n creative-studio --create-namespace \
-#     -f /tmp/values-from-tf.json \
+#     -f generated/values-from-tf.yaml \
 #     -f ../deploy/helm/creative-studio/values-dev.yaml
 #
 # Helm merges later -f files on top of earlier ones, so this file should
@@ -32,7 +34,7 @@ backend:
     TRUSTED_HOSTS: "*"
     # Vertex AI region for all generative-model calls (Gemini, Imagen,
     # Veo, Lyria). Override here because preview image models such as
-    # `gemini-3.1-flash-image-preview` (Nano Banana 2) and
+    # `gemini-2.5-flash-image` (Nano Banana 2) and
     # `gemini-3-pro-image-preview` are currently deployed only to
     # `us-central1`; calling them via `asia-south1` returns 404 NOT_FOUND.
     # Cloud SQL, GCS buckets, GKE nodes etc. continue to live in the
