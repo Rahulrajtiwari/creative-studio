@@ -228,7 +228,7 @@ class SourceAssetService:
         thumbnail_gcs_uri: str | None = None
         original_gcs_uri: str | None = None
 
-        temp_dir = f"temp/source_assets/{uuid.uuid4()}"
+        temp_dir = f"/tmp/source_assets/{uuid.uuid4()}"
         final_aspect_ratio: AspectRatioEnum
 
         try:
@@ -668,7 +668,7 @@ class SourceAssetService:
 
         final_gcs_uri: str | None = None
         thumbnail_gcs_uri: str | None = None
-        temp_dir = f"temp/source_assets/{uuid.uuid4()}"
+        temp_dir = f"/tmp/source_assets/{uuid.uuid4()}"
         final_aspect_ratio: AspectRatioEnum
 
         try:

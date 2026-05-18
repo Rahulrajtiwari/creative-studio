@@ -386,7 +386,7 @@ def _process_video_in_background(
                                 output_path = f"{generated_video.video.uri.replace(f'gs://{cfg.GENMEDIA_BUCKET}/', '')}"
 
                                 # Step 1: Download the Video from GCS
-                                local_output_path = f"thumbnails/{output_path}"
+                                local_output_path = f"/tmp/thumbnails/{output_path}"
                                 downloaded_video_path = await asyncio.to_thread(
                                     gcs_service.download_from_gcs,
                                     gcs_uri_path=output_path,
@@ -409,7 +409,7 @@ def _process_video_in_background(
                                                 gcs_service.upload_file_to_gcs,
                                                 local_path=thumbnail_path,
                                                 destination_blob_name=thumbnail_path.replace(
-                                                    "thumbnails/",
+                                                    "/tmp/thumbnails/",
                                                     "",
                                                 ),
                                                 mime_type="image/png",
@@ -511,7 +511,7 @@ def _process_video_concatenation_in_background(
 
     worker_logger = logging.getLogger(f"video_concat_worker.{media_item_id}")
     worker_logger.setLevel(logging.INFO)
-    temp_dir = f"temp/{media_item_id}"
+    temp_dir = f"/tmp/concat_{media_item_id}"
 
     try:
         if worker_logger.hasHandlers():
