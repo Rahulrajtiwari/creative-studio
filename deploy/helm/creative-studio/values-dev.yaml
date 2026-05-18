@@ -28,7 +28,7 @@ backend:
     minReplicas: 2
     maxReplicas: 6
   image:
-    tag: "creative-studio-backend@sha256:98fd3c19d3f579adaf3e42277f005a344d3ad695080858b68b0e19b1fd15cabe"
+    tag: "creative-studio-backend@sha256:4f86cf6f83c5d9212c41e3b473ab660f541e3964887ba2ffd62703a7834cfb85"
   config:
     DB_USER: "cs-be-dev@ravi-argolis-01.iam"
     TRUSTED_HOSTS: "*"
@@ -98,7 +98,7 @@ migrations:
   # because every step is idempotent).
   activeDeadlineSeconds: 1800
   image:
-    tag: "creative-studio-backend@sha256:98fd3c19d3f579adaf3e42277f005a344d3ad695080858b68b0e19b1fd15cabe"
+    tag: "creative-studio-backend@sha256:4f86cf6f83c5d9212c41e3b473ab660f541e3964887ba2ffd62703a7834cfb85"
   command:
     - "/bin/sh"
     - "-c"
