@@ -93,6 +93,12 @@ async def ensure_admin_user_exists(db: AsyncSession) -> UserModel | None:
             logger.info(
                 f"User document for '{admin_email}' already exists. ID: {existing_user.id}",
             )
+            if UserRoleEnum.ADMIN not in existing_user.roles:
+                logger.info(f"Adding ADMIN role to existing user '{admin_email}'.")
+                roles = list(existing_user.roles)
+                roles.append(UserRoleEnum.ADMIN)
+                await user_repo.update(existing_user.id, {"roles": roles})
+                existing_user = await user_repo.get_by_email(admin_email)
             return existing_user
         logger.warning(
             f"No user document found for email '{admin_email}'. Creating one.",
